@@ -6,6 +6,41 @@ This file tracks backend-only implementation progress, verification evidence, an
 
 ## Checkpoints
 
+### Checkpoint 5: File listing API
+
+Goal:
+
+- add an authenticated list endpoint for a user's bucket
+- support root and nested prefix navigation
+- translate flat object keys into file/folder entries for the UI
+- return pagination state compatible with S3 listing
+
+Verification steps:
+
+- `make backend-dev-up`
+- start backend with local S3-compatible settings
+- seed a user bucket with nested objects
+- `make backend-build`
+- `go test ./...`
+- call list endpoint for root and nested paths
+- verify files, folders, and pagination metadata in responses
+
+Verification result:
+
+- passed on 2026-03-12
+- `make backend-dev-up`: passed
+- backend started locally against Postgres + MinIO: passed
+- seeded nested objects into a signup-created user bucket: passed
+- `make backend-build`: passed
+- `go test ./...`: passed
+- root list call returned grouped folders/files and continuation token: passed
+- nested `path=docs` list call returned folder and file entries correctly: passed
+- continuation-token pagination returned remaining root entries on page 2: passed
+
+Commit:
+
+- pending
+
 ### Checkpoint 4: Backend DTO contract and OpenAPI generation
 
 Goal:

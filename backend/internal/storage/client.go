@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path"
+	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
@@ -16,6 +19,32 @@ import (
 type Client struct {
 	s3         *s3.Client
 	pingBucket string
+}
+
+type ListPathInput struct {
+	Bucket            string
+	Prefix            string
+	ContinuationToken string
+	MaxKeys           int32
+}
+
+type ListPathResult struct {
+	Folders               []FolderEntry
+	Files                 []FileEntry
+	NextContinuationToken string
+	HasMore               bool
+}
+
+type FolderEntry struct {
+	Name string
+	Path string
+}
+
+type FileEntry struct {
+	Name         string
+	Path         string
+	Size         int64
+	LastModified time.Time
 }
 
 func NewClient(_ context.Context, cfg config.S3Config) (*Client, error) {
@@ -70,4 +99,64 @@ func (c *Client) DeleteBucket(ctx context.Context, bucket string) error {
 	}
 
 	return nil
+}
+
+func (c *Client) ListPath(ctx context.Context, input ListPathInput) (ListPathResult, error) {
+	maxKeys := input.MaxKeys
+	if maxKeys <= 0 {
+		maxKeys = 100
+	}
+
+	response, err := c.s3.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
+		Bucket:            &input.Bucket,
+		Prefix:            aws.String(input.Prefix),
+		Delimiter:         aws.String("/"),
+		ContinuationToken: emptyToNil(input.ContinuationToken),
+		MaxKeys:           aws.Int32(maxKeys),
+	})
+	if err != nil {
+		return ListPathResult{}, fmt.Errorf("list path %q in bucket %q: %w", input.Prefix, input.Bucket, err)
+	}
+
+	result := ListPathResult{
+		Folders:               make([]FolderEntry, 0, len(response.CommonPrefixes)),
+		Files:                 make([]FileEntry, 0, len(response.Contents)),
+		NextContinuationToken: aws.ToString(response.NextContinuationToken),
+		HasMore:               response.IsTruncated != nil && *response.IsTruncated,
+	}
+
+	for _, prefix := range response.CommonPrefixes {
+		fullPrefix := strings.TrimSuffix(aws.ToString(prefix.Prefix), "/")
+		if fullPrefix == "" {
+			continue
+		}
+
+		result.Folders = append(result.Folders, FolderEntry{
+			Name: path.Base(fullPrefix),
+			Path: fullPrefix,
+		})
+	}
+
+	for _, object := range response.Contents {
+		key := aws.ToString(object.Key)
+		if key == "" || key == input.Prefix {
+			continue
+		}
+
+		result.Files = append(result.Files, FileEntry{
+			Name:         path.Base(key),
+			Path:         key,
+			Size:         aws.ToInt64(object.Size),
+			LastModified: aws.ToTime(object.LastModified),
+		})
+	}
+
+	return result, nil
+}
+
+func emptyToNil(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return aws.String(value)
 }

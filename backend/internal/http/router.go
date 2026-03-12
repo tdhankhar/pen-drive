@@ -10,6 +10,7 @@ import (
 	"github.com/abhishek/pen-drive/backend/internal/api/dto"
 	"github.com/abhishek/pen-drive/backend/internal/auth"
 	"github.com/abhishek/pen-drive/backend/internal/config"
+	"github.com/abhishek/pen-drive/backend/internal/files"
 	"github.com/abhishek/pen-drive/backend/internal/storage"
 	"github.com/abhishek/pen-drive/backend/internal/users"
 	"github.com/gin-contrib/cors"
@@ -28,9 +29,9 @@ func NewRouter(logger *slog.Logger, dbConn *sql.DB, storageClient *storage.Clien
 	router.Use(RequestLogger(logger))
 	router.Use(
 		cors.New(cors.Config{
-			AllowOrigins: []string{"http://127.0.0.1:5173", "http://localhost:5173"},
-			AllowMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-			AllowHeaders: []string{"Origin", "Content-Type", "Accept", "Authorization"},
+			AllowOrigins:  []string{"http://127.0.0.1:5173", "http://localhost:5173"},
+			AllowMethods:  []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+			AllowHeaders:  []string{"Origin", "Content-Type", "Accept", "Authorization"},
 			ExposeHeaders: []string{"X-Request-Id"},
 		}),
 	)
@@ -41,6 +42,8 @@ func NewRouter(logger *slog.Logger, dbConn *sql.DB, storageClient *storage.Clien
 	userRepo := users.NewRepository(dbConn)
 	authService := auth.NewService(dbConn, userRepo, storageClient, jwtConfig)
 	authHandler := auth.NewHandler(authService)
+	filesService := files.NewService(storageClient)
+	filesHandler := files.NewHandler(filesService)
 
 	// Healthz godoc
 	// @Summary Liveness
@@ -91,6 +94,7 @@ func NewRouter(logger *slog.Logger, dbConn *sql.DB, storageClient *storage.Clien
 	authGroup.POST("/refresh", authHandler.Refresh)
 
 	api.GET("/me", authHandler.AuthMiddleware(), authHandler.Me)
+	api.GET("/files", authHandler.AuthMiddleware(), filesHandler.List)
 
 	return router
 }
