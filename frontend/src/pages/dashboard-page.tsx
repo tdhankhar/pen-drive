@@ -7,6 +7,7 @@ import type {
   GithubComAbhishekPenDriveBackendInternalApiDtoFileListResponse,
   GithubComAbhishekPenDriveBackendInternalApiDtoFileSystemEntry,
 } from "../lib/api/generated";
+import { apiClient } from "../lib/api/http";
 import { useAuth } from "../lib/use-auth";
 
 export function DashboardPage() {
@@ -26,23 +27,20 @@ export function DashboardPage() {
     setIsLoading(true);
     setError(null);
 
-    const response = await getApiV1Files(
-      activePath ? { path: activePath } : undefined,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      },
-    );
+    const { data, error } = await getApiV1Files({
+      client: apiClient,
+      query: activePath ? { path: activePath } : undefined,
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
 
-    if (response.status !== 200) {
-      setError(response.data.error?.message ?? "listing failed");
+    if (error) {
+      setError(error.error?.message ?? "listing failed");
       setListing(null);
       setIsLoading(false);
       return;
     }
 
-    setListing(response.data);
+    setListing(data);
     setIsLoading(false);
   }
 

@@ -8,6 +8,7 @@ import type {
   GithubComAbhishekPenDriveBackendInternalApiDtoAuthenticatedUser,
   GithubComAbhishekPenDriveBackendInternalApiDtoCredentialsRequest,
 } from "./api/generated";
+import { apiClient } from "./api/http";
 
 type SessionState = {
   accessToken: string;
@@ -51,12 +52,15 @@ export function clearSession() {
 export async function signup(
   credentials: GithubComAbhishekPenDriveBackendInternalApiDtoCredentialsRequest,
 ): Promise<SessionState> {
-  const response = await postApiV1AuthSignup(credentials);
-  if (response.status !== 201) {
-    throw new Error(response.data.error?.message ?? "signup failed");
+  const { data, error } = await postApiV1AuthSignup({
+    client: apiClient,
+    body: credentials,
+  });
+  if (error) {
+    throw new Error(error.error?.message ?? "signup failed");
   }
 
-  const session = toSessionState(response.data);
+  const session = toSessionState(data);
   writeSession(session);
   return session;
 }
@@ -64,12 +68,15 @@ export async function signup(
 export async function login(
   credentials: GithubComAbhishekPenDriveBackendInternalApiDtoCredentialsRequest,
 ): Promise<SessionState> {
-  const response = await postApiV1AuthLogin(credentials);
-  if (response.status !== 200) {
-    throw new Error(response.data.error?.message ?? "login failed");
+  const { data, error } = await postApiV1AuthLogin({
+    client: apiClient,
+    body: credentials,
+  });
+  if (error) {
+    throw new Error(error.error?.message ?? "login failed");
   }
 
-  const session = toSessionState(response.data);
+  const session = toSessionState(data);
   writeSession(session);
   return session;
 }
@@ -77,34 +84,36 @@ export async function login(
 export async function refreshSession(
   currentRefreshToken: string,
 ): Promise<SessionState> {
-  const response = await postApiV1AuthRefresh({
-    refresh_token: currentRefreshToken,
+  const { data: refreshData, error: refreshError } = await postApiV1AuthRefresh({
+    client: apiClient,
+    body: { refresh_token: currentRefreshToken },
   });
 
-  if (response.status !== 200) {
+  if (refreshError) {
     clearSession();
-    throw new Error(response.data.error?.message ?? "refresh failed");
+    throw new Error(refreshError.error?.message ?? "refresh failed");
   }
 
-  if (!response.data.tokens?.access_token) {
+  if (!refreshData.tokens?.access_token) {
     clearSession();
     throw new Error("refresh token response is incomplete");
   }
 
-  const userResponse = await getApiV1Me({
+  const { data: userData, error: userError } = await getApiV1Me({
+    client: apiClient,
     headers: {
-      Authorization: `Bearer ${response.data.tokens.access_token}`,
+      Authorization: `Bearer ${refreshData.tokens.access_token}`,
     },
   });
 
-  if (userResponse.status !== 200) {
+  if (userError) {
     clearSession();
     throw new Error("session bootstrap failed");
   }
 
   const session = toSessionState({
-    tokens: response.data.tokens,
-    user: userResponse.data,
+    tokens: refreshData.tokens,
+    user: userData,
   });
   writeSession(session);
   return session;
