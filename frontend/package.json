@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "api:generate": "orval --config orval.config.ts",
+    "api:generate": "orval --config orval.config.ts && node scripts/fix-folder-upload-client.mjs",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint . && eslint .",

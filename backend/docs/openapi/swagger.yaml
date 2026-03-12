@@ -78,6 +78,13 @@ definitions:
       file:
         $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.UploadedFileInfo'
     type: object
+  github_com_abhishek_pen-drive_backend_internal_api_dto.FolderUploadResponse:
+    properties:
+      files:
+        items:
+          $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.UploadedFileInfo'
+        type: array
+    type: object
   github_com_abhishek_pen-drive_backend_internal_api_dto.RefreshRequest:
     properties:
       refresh_token:
@@ -303,6 +310,55 @@ paths:
       security:
       - BearerAuth: []
       summary: Upload file
+      tags:
+      - files
+  /api/v1/files/upload-folder:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload multiple files to a destination folder in the user's bucket,
+        preserving relative paths
+      parameters:
+      - description: Files to upload (repeated)
+        in: formData
+        name: files
+        required: true
+        type: file
+      - description: Relative path for each file (repeated, must match files count)
+        in: formData
+        name: relative_paths
+        required: true
+        type: string
+      - description: Destination folder path within bucket
+        in: formData
+        name: path
+        type: string
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.FolderUploadResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Upload folder
       tags:
       - files
   /api/v1/me:

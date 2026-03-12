@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"path"
 	"sort"
 	"strings"
@@ -12,6 +13,12 @@ import (
 
 	"github.com/abhishek/pen-drive/backend/internal/api/dto"
 	"github.com/abhishek/pen-drive/backend/internal/storage"
+)
+
+var (
+	ErrInvalidUploadInput = errors.New("invalid upload input")
+	ErrZeroByteFile       = errors.New("zero byte file")
+	ErrDuplicateBatchKey  = errors.New("duplicate target key in batch")
 )
 
 type Service struct {
@@ -210,4 +217,200 @@ func validateDestinationPath(rawPath string) (string, error) {
 	}
 
 	return cleaned, nil
+}
+
+// validateRelativePath validates a relative path within a folder upload
+// Rules:
+// 1. Normalize backslashes to forward slashes
+// 2. Reject path traversal attempts (..)
+// 3. Reject empty or absolute paths
+// 4. Must have at least one non-empty segment after normalization
+func validateRelativePath(rawPath string) (string, error) {
+	trimmed := strings.TrimSpace(rawPath)
+	if trimmed == "" {
+		return "", errors.New("relative path cannot be empty")
+	}
+
+	// Reject absolute paths
+	if strings.HasPrefix(trimmed, "/") {
+		return "", errors.New("relative path cannot be absolute")
+	}
+
+	// Normalize separators
+	normalized := strings.ReplaceAll(trimmed, "\\", "/")
+
+	// Split and validate segments
+	parts := strings.Split(normalized, "/")
+	validParts := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part == "" {
+			// Skip empty segments (from double slashes)
+			continue
+		}
+		if part == "." {
+			// Skip current directory references
+			continue
+		}
+		if part == ".." {
+			// Reject traversal
+			return "", errors.New("relative path cannot contain traversal sequences")
+		}
+		validParts = append(validParts, part)
+	}
+
+	// Must have at least one segment after normalization
+	if len(validParts) == 0 {
+		return "", errors.New("relative path must have at least one file segment")
+	}
+
+	result := strings.Join(validParts, "/")
+	return result, nil
+}
+
+// buildFinalObjectKey constructs the final S3 key from destination and relative path
+func buildFinalObjectKey(destinationPath, relativePath string) string {
+	if destinationPath == "" {
+		return relativePath
+	}
+	return fmt.Sprintf("%s/%s", destinationPath, relativePath)
+}
+
+// UploadFolder handles batch folder uploads with relative path preservation
+func (s *Service) UploadFolder(
+	ctx context.Context,
+	userID string,
+	destinationPath string,
+	multipartFiles []*multipart.FileHeader,
+	relativePaths []string,
+) ([]UploadResult, error) {
+	if len(multipartFiles) == 0 {
+		return nil, fmt.Errorf("%w: files field is required", ErrInvalidUploadInput)
+	}
+	if len(relativePaths) == 0 {
+		return nil, fmt.Errorf("%w: relative_paths field is required", ErrInvalidUploadInput)
+	}
+	if len(multipartFiles) != len(relativePaths) {
+		return nil, fmt.Errorf("%w: files and relative_paths counts must match", ErrInvalidUploadInput)
+	}
+
+	// Validate destination path once
+	normalizedDestPath, err := validateDestinationPath(destinationPath)
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid destination path: %v", ErrInvalidUploadInput, err)
+	}
+
+	// Phase 1: Validate all inputs and build upload items
+	uploadItems := make([]uploadItemInternal, 0, len(multipartFiles))
+	seenKeys := make(map[string]bool)
+	now := time.Now().UTC()
+	uploadedAt := now.Format(time.RFC3339)
+
+	for i, mfh := range multipartFiles {
+		// Check zero-byte file
+		if mfh.Size == 0 {
+			return nil, fmt.Errorf("%w: file at index %d", ErrZeroByteFile, i)
+		}
+
+		// Validate relative path
+		validatedRelPath, err := validateRelativePath(relativePaths[i])
+		if err != nil {
+			return nil, fmt.Errorf("%w: invalid relative path at index %d: %v", ErrInvalidUploadInput, i, err)
+		}
+
+		// Extract basename (filename) from validated relative path
+		segments := strings.Split(validatedRelPath, "/")
+		basename := segments[len(segments)-1]
+
+		// Validate filename
+		validatedFilename, err := validateFilename(basename)
+		if err != nil {
+			return nil, fmt.Errorf("%w: invalid filename at index %d: %v", ErrInvalidUploadInput, i, err)
+		}
+
+		// Build final object key
+		finalKey := buildFinalObjectKey(normalizedDestPath, validatedRelPath)
+
+		// Check for duplicates within this batch
+		if seenKeys[finalKey] {
+			return nil, fmt.Errorf("%w: %s", ErrDuplicateBatchKey, finalKey)
+		}
+		seenKeys[finalKey] = true
+
+		// Create upload item
+		item := uploadItemInternal{
+			FinalKey:        finalKey,
+			Filename:        validatedFilename,
+			OriginalName:    basename,
+			ContentType:     mfh.Header.Get("Content-Type"),
+			Size:            mfh.Size,
+			MultipartHeader: mfh,
+			UploadedAt:      uploadedAt,
+		}
+		uploadItems = append(uploadItems, item)
+	}
+
+	// Phase 2: Check for duplicate existing keys in storage
+	// Note: This is a simplified check. In production, you might batch-check or rely on PutObject's ErrObjectAlreadyExists
+	// For now, we'll let the PutObject call handle it
+
+	// Phase 3: Upload files in deterministic order (sorted by final key)
+	sort.Slice(uploadItems, func(i, j int) bool {
+		return uploadItems[i].FinalKey < uploadItems[j].FinalKey
+	})
+
+	results := make([]UploadResult, 0, len(uploadItems))
+	for _, item := range uploadItems {
+		// Open file
+		src, err := item.MultipartHeader.Open()
+		if err != nil {
+			return nil, fmt.Errorf("failed to open file %s: %w", item.Filename, err)
+		}
+		defer src.Close()
+
+		// Prepare metadata
+		metadata := map[string]string{
+			"original-filename":   item.OriginalName,
+			"stored-filename":     item.Filename,
+			"uploaded-by-user-id": userID,
+			"uploaded-at":         item.UploadedAt,
+		}
+
+		// Upload to storage
+		putInput := storage.PutObjectInput{
+			Bucket:      userID,
+			Key:         item.FinalKey,
+			Body:        src,
+			Size:        item.Size,
+			ContentType: item.ContentType,
+			Metadata:    metadata,
+		}
+
+		_, err = s.storage.PutObject(ctx, putInput)
+		if err != nil {
+			if errors.Is(err, storage.ErrObjectAlreadyExists) {
+				return nil, fmt.Errorf("%w: %s", storage.ErrObjectAlreadyExists, item.FinalKey)
+			}
+			return nil, fmt.Errorf("failed to upload %s: %w", item.Filename, err)
+		}
+
+		results = append(results, UploadResult{
+			Name:       item.Filename,
+			Path:       item.FinalKey,
+			Size:       item.Size,
+			UploadedAt: item.UploadedAt,
+		})
+	}
+
+	return results, nil
+}
+
+// uploadItemInternal represents an internal upload item with all metadata
+type uploadItemInternal struct {
+	FinalKey        string
+	Filename        string
+	OriginalName    string
+	ContentType     string
+	Size            int64
+	MultipartHeader *multipart.FileHeader
+	UploadedAt      string
 }

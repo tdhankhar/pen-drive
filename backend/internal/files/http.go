@@ -1,6 +1,7 @@
 package files
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -145,6 +146,92 @@ func (h *Handler) Upload(c *gin.Context) {
 			Size:       result.Size,
 			UploadedAt: result.UploadedAt,
 		},
+	})
+}
+
+// UploadFolder godoc
+// @Summary Upload folder
+// @Description Upload multiple files to a destination folder in the user's bucket, preserving relative paths
+// @Tags files
+// @Accept multipart/form-data
+// @Produce json
+// @Security BearerAuth
+// @Param files formData file true "Files to upload (repeated)"
+// @Param relative_paths formData string true "Relative path for each file (repeated, must match files count)"
+// @Param path formData string false "Destination folder path within bucket"
+// @Success 201 {object} dto.FolderUploadResponse
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 401 {object} dto.ErrorResponse
+// @Failure 409 {object} dto.ErrorResponse
+// @Failure 500 {object} dto.ErrorResponse
+// @Router /api/v1/files/upload-folder [post]
+func (h *Handler) UploadFolder(c *gin.Context) {
+	userID, _ := c.Get("auth.user_id")
+
+	// Parse multipart form
+	err := c.Request.ParseMultipartForm(10 << 20) // 10MB limit for all files
+	if err != nil {
+		respondError(c, http.StatusBadRequest, "invalid_multipart", "failed to parse multipart form")
+		return
+	}
+
+	// Extract files
+	files := c.Request.MultipartForm.File["files"]
+	if len(files) == 0 {
+		respondError(c, http.StatusBadRequest, "missing_files", "files field is required")
+		return
+	}
+
+	// Extract relative paths
+	relativePaths := c.Request.Form["relative_paths"]
+	if len(relativePaths) == 0 {
+		respondError(c, http.StatusBadRequest, "invalid_input", "relative_paths field is required")
+		return
+	}
+
+	// Validate array alignment
+	if len(files) != len(relativePaths) {
+		respondError(c, http.StatusBadRequest, "invalid_input", "files and relative_paths counts must match")
+		return
+	}
+
+	// Get destination path
+	destinationPath := c.PostForm("path")
+
+	// Call service layer
+	results, err := h.service.UploadFolder(
+		c.Request.Context(),
+		userID.(string),
+		destinationPath,
+		files,
+		relativePaths,
+	)
+	if err != nil {
+		if errors.Is(err, storage.ErrObjectAlreadyExists) {
+			respondError(c, http.StatusConflict, "file_exists", err.Error())
+			return
+		}
+		if errors.Is(err, ErrInvalidUploadInput) || errors.Is(err, ErrZeroByteFile) || errors.Is(err, ErrDuplicateBatchKey) {
+			respondError(c, http.StatusBadRequest, "invalid_input", err.Error())
+			return
+		}
+		respondError(c, http.StatusInternalServerError, "upload_failed", err.Error())
+		return
+	}
+
+	// Return 201 Created with upload metadata
+	uploadedFiles := make([]dto.UploadedFileInfo, len(results))
+	for i, result := range results {
+		uploadedFiles[i] = dto.UploadedFileInfo{
+			Name:       result.Name,
+			Path:       result.Path,
+			Size:       result.Size,
+			UploadedAt: result.UploadedAt,
+		}
+	}
+
+	c.JSON(http.StatusCreated, dto.FolderUploadResponse{
+		Files: uploadedFiles,
 	})
 }
 

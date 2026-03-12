@@ -298,6 +298,80 @@
                 }
             }
         },
+        "/api/v1/files/upload-folder": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Upload multiple files to a destination folder in the user's bucket, preserving relative paths",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "files"
+                ],
+                "summary": "Upload folder",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "Files to upload (repeated)",
+                        "name": "files",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Relative path for each file (repeated, must match files count)",
+                        "name": "relative_paths",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Destination folder path within bucket",
+                        "name": "path",
+                        "in": "formData"
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.FolderUploadResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/me": {
             "get": {
                 "security": [
@@ -442,6 +516,17 @@
             "properties": {
                 "file": {
                     "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.UploadedFileInfo"
+                }
+            }
+        },
+        "github_com_abhishek_pen-drive_backend_internal_api_dto.FolderUploadResponse": {
+            "type": "object",
+            "properties": {
+                "files": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.UploadedFileInfo"
+                    }
                 }
             }
         },

@@ -38,3 +38,19 @@ type UploadedFileInfo struct {
 type FileUploadResponse struct {
 	File UploadedFileInfo `json:"file"`
 }
+
+// FolderUploadRequest represents a folder upload request with multiple files
+// The actual files are in multipart form, but this DTO documents the structure
+type FolderUploadRequest struct {
+	// Files are the binary file contents (multipart form fields, repeated)
+	Files [][]byte
+	// RelativePaths are the relative paths for each file in the folder structure (repeated)
+	RelativePaths []string
+	// Path is the destination folder path within the user's bucket (optional)
+	Path string
+}
+
+// FolderUploadResponse is the response for a successful folder upload
+type FolderUploadResponse struct {
+	Files []UploadedFileInfo `json:"files"`
+}
