@@ -322,6 +322,71 @@
   background: rgba(201, 49, 49, 0.08);
 }
 
+.conflict-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: rgba(16, 42, 67, 0.4);
+  backdrop-filter: blur(10px);
+}
+
+.conflict-dialog {
+  width: min(100%, 46rem);
+  display: grid;
+  gap: 1.1rem;
+  padding: 1.5rem;
+  border-radius: 1.4rem;
+  background:
+    radial-gradient(circle at top right, rgba(118, 200, 147, 0.18), transparent 28%),
+    rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(24, 78, 119, 0.12);
+  box-shadow: 0 24px 60px rgba(8, 43, 54, 0.2);
+}
+
+.conflict-dialog-copy,
+.conflict-item {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.conflict-dialog-copy h2,
+.conflict-item p {
+  margin: 0;
+}
+
+.conflict-dialog-list {
+  display: grid;
+  gap: 0.8rem;
+  max-height: min(50vh, 24rem);
+  overflow: auto;
+}
+
+.conflict-item {
+  padding: 0.95rem 1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(24, 78, 119, 0.1);
+  background: rgba(244, 251, 253, 0.92);
+}
+
+.conflict-item strong {
+  color: var(--ink);
+}
+
+.conflict-item span {
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+
+.conflict-dialog-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -429,6 +494,15 @@
   .upload-grid {
     grid-template-columns: 1fr;
     display: grid;
+  }
+
+  .conflict-dialog-actions {
+    justify-content: stretch;
+  }
+
+  .conflict-dialog-actions .primary-button,
+  .conflict-dialog-actions .secondary-button {
+    width: 100%;
   }
 
   .entry-button {
