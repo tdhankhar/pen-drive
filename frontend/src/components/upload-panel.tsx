@@ -486,8 +486,8 @@ function isMultipartEligible(file: UppyFile<UploadMeta, UploadBody>) {
   return typeof file.size === "number" && file.size > MULTIPART_THRESHOLD_BYTES;
 }
 
-function authHeaders(token: string): { headers: { Authorization: string } } {
-  return { headers: { Authorization: `Bearer ${token}` } };
+function authHeaders(token: string): { Authorization: string } {
+  return { Authorization: `Bearer ${token}` };
 }
 
 async function uploadViaSingleRequest(
@@ -547,7 +547,7 @@ async function uploadViaMultipart(
         path: target.path,
         size: file.size,
       },
-      ...authHeaders(runtime.accessToken),
+      headers: authHeaders(runtime.accessToken),
     });
   if (initiateError) {
     throw new Error(getErrorMessage(initiateError, initiateResponse.status));
@@ -575,7 +575,7 @@ async function uploadViaMultipart(
             part_number: partNumber,
             upload_id: initiatePayload.upload_id,
           },
-          ...authHeaders(runtime.accessToken),
+          headers: authHeaders(runtime.accessToken),
         });
       if (partError) {
         throw new Error(getErrorMessage(partError, partResponse.status));
@@ -597,7 +597,7 @@ async function uploadViaMultipart(
           parts: uploadedParts,
           upload_id: initiatePayload.upload_id,
         },
-        ...authHeaders(runtime.accessToken),
+        headers: authHeaders(runtime.accessToken),
       });
     if (completeError) {
       throw new Error(getErrorMessage(completeError, completeResponse.status));

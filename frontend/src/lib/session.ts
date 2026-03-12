@@ -108,7 +108,7 @@ export async function refreshSession(
 
   if (userError) {
     clearSession();
-    throw new Error("session bootstrap failed");
+    throw new Error(userError.error?.message ?? "session bootstrap failed");
   }
 
   const session = toSessionState({
