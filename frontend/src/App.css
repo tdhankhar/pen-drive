@@ -1,4 +1,3 @@
-.auth-layout,
 .dashboard-shell,
 .screen-state {
   min-height: 100svh;
@@ -9,36 +8,6 @@
   place-items: center;
   color: var(--ink-muted);
   font-size: 1.05rem;
-}
-
-.auth-layout {
-  display: grid;
-  grid-template-columns: 1.1fr 0.9fr;
-}
-
-.auth-panel {
-  padding: 4rem;
-  display: grid;
-  align-content: center;
-}
-
-.auth-panel-copy {
-  color: white;
-  background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.22), transparent 32%),
-    linear-gradient(145deg, #184e77, #1e6091 35%, #168aad 68%, #76c893);
-}
-
-.auth-panel-copy h2 {
-  margin: 0 0 1rem;
-  font-family: var(--font-display);
-  font-size: clamp(2.5rem, 5vw, 4.6rem);
-  line-height: 0.94;
-}
-
-.auth-panel-copy p:last-child {
-  max-width: 34rem;
-  color: rgba(255, 255, 255, 0.82);
 }
 
 .auth-card {
@@ -108,7 +77,6 @@
   color: #8f2121;
 }
 
-.primary-button,
 .secondary-button {
   border: 0;
   border-radius: 999px;
@@ -116,30 +84,8 @@
   font: inherit;
   font-weight: 700;
   cursor: pointer;
-}
-
-.primary-button {
-  color: white;
-  background: linear-gradient(135deg, #168aad, #1e6091);
-}
-
-.secondary-button {
   color: var(--ink);
   background: rgba(24, 78, 119, 0.08);
-}
-
-.primary-button:disabled {
-  opacity: 0.72;
-  cursor: wait;
-}
-
-.auth-footer {
-  margin-top: 1rem;
-  color: var(--ink-muted);
-}
-
-.auth-footer a {
-  color: #1e6091;
 }
 
 .dashboard-shell {
@@ -295,14 +241,6 @@
 }
 
 @media (max-width: 900px) {
-  .auth-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .auth-panel {
-    padding: 1.5rem;
-  }
-
   .dashboard-shell {
     padding: 1.25rem;
   }

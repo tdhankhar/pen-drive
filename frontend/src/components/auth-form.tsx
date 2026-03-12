@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+import { Button } from "@/components/ui/button";
+
 type AuthFormProps = {
   title: string;
   subtitle: string;
@@ -47,6 +49,7 @@ export function AuthForm({
         <span>Email</span>
         <input
           autoComplete="email"
+          className="w-full rounded-xl border border-border bg-white px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           name="email"
           onChange={(event) => setEmail(event.target.value)}
           placeholder="you@example.com"
@@ -59,6 +62,7 @@ export function AuthForm({
         <span>Password</span>
         <input
           autoComplete="current-password"
+          className="w-full rounded-xl border border-border bg-white px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           name="password"
           onChange={(event) => setPassword(event.target.value)}
           placeholder="Minimum 8 characters"
@@ -69,9 +73,9 @@ export function AuthForm({
 
       {error ? <p className="form-error">{error}</p> : null}
 
-      <button className="primary-button" disabled={isSubmitting} type="submit">
+      <Button type="submit" className="w-full" disabled={isSubmitting}>
         {isSubmitting ? "Working..." : submitLabel}
-      </button>
+      </Button>
     </form>
   );
 }
