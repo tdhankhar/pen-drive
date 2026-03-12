@@ -6,10 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface GithubComAbhishekPenDriveBackendInternalApiDtoFileSystemEntry {
-  last_modified?: string;
+export interface GithubComAbhishekPenDriveBackendInternalApiDtoUploadedFileInfo {
   name?: string;
   path?: string;
   size?: number;
-  type?: string;
+  uploaded_at?: string;
 }
