@@ -115,6 +115,7 @@ func (h *Handler) Upload(c *gin.Context) {
 		userID.(string),
 		destinationPath,
 		filename,
+		file.Header.Get("Content-Type"),
 		src,
 		file.Size,
 	)
