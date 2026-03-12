@@ -2,7 +2,9 @@ package files
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 	"time"
@@ -13,6 +15,13 @@ import (
 
 type Service struct {
 	storage *storage.Client
+}
+
+type UploadResult struct {
+	Name       string
+	Path       string
+	Size       int64
+	UploadedAt string
 }
 
 func NewService(storageClient *storage.Client) *Service {
@@ -83,4 +92,85 @@ func toPrefix(path string) string {
 		return ""
 	}
 	return fmt.Sprintf("%s/", path)
+}
+
+// Upload handles single-file uploads with path validation and filename sanitization
+func (s *Service) Upload(ctx context.Context, userID, destinationPath, filename string, body io.Reader, size int64) (UploadResult, error) {
+	// Validate and normalize destination path
+	normalizedPath := normalizePath(destinationPath)
+	
+	// Validate filename (minimal sanitization for issue #1)
+	validatedFilename, err := validateFilename(filename)
+	if err != nil {
+		return UploadResult{}, err
+	}
+	
+	// Construct S3 key: path/filename
+	var s3Key string
+	if normalizedPath == "" {
+		s3Key = validatedFilename
+	} else {
+		s3Key = fmt.Sprintf("%s/%s", normalizedPath, validatedFilename)
+	}
+	
+	// Prepare metadata
+	now := time.Now().UTC()
+	uploadedAt := now.Format(time.RFC3339)
+	metadata := map[string]string{
+		"original-filename":   filename,
+		"stored-filename":     validatedFilename,
+		"uploaded-by-user-id": userID,
+		"uploaded-at":         uploadedAt,
+	}
+	
+	// Upload to storage
+	putInput := storage.PutObjectInput{
+		Bucket:   userID,
+		Key:      s3Key,
+		Body:     body,
+		Size:     size,
+		Metadata: metadata,
+	}
+	
+	_, err = s.storage.PutObject(ctx, putInput)
+	if err != nil {
+		if errors.Is(err, storage.ErrObjectAlreadyExists) {
+			return UploadResult{}, fmt.Errorf("object already exists: %s", s3Key)
+		}
+		return UploadResult{}, err
+	}
+	
+	return UploadResult{
+		Name:       validatedFilename,
+		Path:       s3Key,
+		Size:       size,
+		UploadedAt: uploadedAt,
+	}, nil
+}
+
+// validateFilename applies minimal filename validation for issue #1
+// Rules:
+// 1. Use provided filename, trim whitespace
+// 2. Reject path separators and traversal fragments (/, \, ..)
+// 3. Reject empty filenames
+func validateFilename(filename string) (string, error) {
+	// Trim whitespace
+	cleaned := strings.TrimSpace(filename)
+	
+	// Reject empty
+	if cleaned == "" {
+		return "", errors.New("filename cannot be empty")
+	}
+	
+	// Reject path separators
+	if strings.Contains(cleaned, "/") || strings.Contains(cleaned, "\\") {
+		return "", errors.New("filename cannot contain path separators")
+	}
+	
+	// Reject traversal attempts
+	if strings.Contains(cleaned, "..") {
+		return "", errors.New("filename cannot contain traversal sequences")
+	}
+	
+	return cleaned, nil
 }

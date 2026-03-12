@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"path"
 	"strings"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
 	"github.com/abhishek/pen-drive/backend/internal/config"
@@ -45,6 +47,27 @@ type FileEntry struct {
 	Path         string
 	Size         int64
 	LastModified time.Time
+}
+
+type PutObjectInput struct {
+	Bucket      string
+	Key         string
+	Body        io.Reader
+	Size        int64
+	ContentType string
+	Metadata    map[string]string
+}
+
+type PutObjectResult struct {
+	Key  string
+	ETag string
+}
+
+type ObjectMetadata struct {
+	OriginalFilename string
+	StoredFilename   string
+	UploadedByUserID string
+	UploadedAt       string
 }
 
 func NewClient(_ context.Context, cfg config.S3Config) (*Client, error) {
@@ -154,9 +177,63 @@ func (c *Client) ListPath(ctx context.Context, input ListPathInput) (ListPathRes
 	return result, nil
 }
 
+func (c *Client) PutObject(ctx context.Context, input PutObjectInput) (PutObjectResult, error) {
+	if input.Size == 0 {
+		return PutObjectResult{}, errors.New("zero-byte uploads not allowed")
+	}
+
+	// Check if object already exists
+	_, err := c.s3.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: &input.Bucket,
+		Key:    &input.Key,
+	})
+	if err == nil {
+		// Object exists
+		return PutObjectResult{}, ErrObjectAlreadyExists
+	}
+	var responseErr *awshttp.ResponseError
+	if !errors.As(err, &responseErr) || responseErr.HTTPStatusCode() != 404 {
+		// Some other error occurred
+		return PutObjectResult{}, fmt.Errorf("check object existence: %w", err)
+	}
+
+	// Set ContentType default
+	contentType := input.ContentType
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	// Prepare metadata
+	userMetadata := input.Metadata
+	if userMetadata == nil {
+		userMetadata = make(map[string]string)
+	}
+
+	// Perform the upload
+	uploader := manager.NewUploader(c.s3)
+	result, err := uploader.Upload(ctx, &s3.PutObjectInput{
+		Bucket:      &input.Bucket,
+		Key:         &input.Key,
+		Body:        input.Body,
+		ContentType: aws.String(contentType),
+		Metadata:    userMetadata,
+	})
+	if err != nil {
+		return PutObjectResult{}, fmt.Errorf("upload object %q to bucket %q: %w", input.Key, input.Bucket, err)
+	}
+
+	return PutObjectResult{
+		Key:  input.Key,
+		ETag: aws.ToString(result.ETag),
+	}, nil
+}
+
 func emptyToNil(value string) *string {
 	if value == "" {
 		return nil
 	}
 	return aws.String(value)
 }
+
+// ErrObjectAlreadyExists is returned when attempting to upload to a key that already exists
+var ErrObjectAlreadyExists = errors.New("object already exists")

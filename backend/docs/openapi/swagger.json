@@ -225,6 +225,79 @@
                 }
             }
         },
+        "/api/v1/files/upload": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Upload a single file to a destination path in the user's bucket",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "files"
+                ],
+                "summary": "Upload file",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "File to upload",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Destination path within bucket",
+                        "name": "path",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Override filename",
+                        "name": "filename",
+                        "in": "formData"
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.FileUploadResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/me": {
             "get": {
                 "security": [
@@ -364,6 +437,14 @@
                 }
             }
         },
+        "github_com_abhishek_pen-drive_backend_internal_api_dto.FileUploadResponse": {
+            "type": "object",
+            "properties": {
+                "file": {
+                    "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.UploadedFileInfo"
+                }
+            }
+        },
         "github_com_abhishek_pen-drive_backend_internal_api_dto.RefreshRequest": {
             "type": "object",
             "properties": {
@@ -391,6 +472,27 @@
                 "refresh_token_expires_at": {
                     "type": "string",
                     "example": "2026-04-11T16:00:00Z"
+                }
+            }
+        },
+        "github_com_abhishek_pen-drive_backend_internal_api_dto.UploadedFileInfo": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "example": "document.pdf"
+                },
+                "path": {
+                    "type": "string",
+                    "example": "uploads/document.pdf"
+                },
+                "size": {
+                    "type": "integer",
+                    "example": 1024576
+                },
+                "uploaded_at": {
+                    "type": "string",
+                    "example": "2026-03-12T16:00:00Z"
                 }
             }
         }
