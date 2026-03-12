@@ -36,7 +36,7 @@ Verification result:
 
 Commit:
 
-- pending
+- `b0c8bb6 feat: wire dashboard file browser`
 
 ### Checkpoint 1: Frontend foundation scaffold
 
