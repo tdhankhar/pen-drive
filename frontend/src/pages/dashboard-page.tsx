@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -14,7 +15,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { UploadPanel } from "../components/upload-panel";
 import { getApiV1Files } from "../lib/api/generated";
 import type {
-  GithubComAbhishekPenDriveBackendInternalApiDtoFileListResponse,
   GithubComAbhishekPenDriveBackendInternalApiDtoFileSystemEntry,
 } from "../lib/api/generated";
 import { apiClient } from "../lib/api/http";
@@ -23,58 +23,26 @@ import { useAuth } from "../lib/use-auth";
 export function DashboardPage() {
   const auth = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [listing, setListing] =
-    useState<GithubComAbhishekPenDriveBackendInternalApiDtoFileListResponse | null>(
-      null,
-    );
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const session = auth.session;
   const currentPath = searchParams.get("path") ?? "";
   const segments = currentPath.split("/").filter(Boolean);
 
-  async function loadListing(activePath: string, accessToken: string) {
-    setIsLoading(true);
-    setError(null);
+  const queryClient = useQueryClient();
 
-    const { data, error } = await getApiV1Files({
-      client: apiClient,
-      query: activePath ? { path: activePath } : undefined,
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-
-    if (error) {
-      setError(error.error?.message ?? "listing failed");
-      setListing(null);
-      setIsLoading(false);
-      return;
-    }
-
-    setListing(data);
-    setIsLoading(false);
-  }
-
-  useEffect(() => {
-    if (!session) {
-      return;
-    }
-
-    let cancelled = false;
-
-    const load = async () => {
-      if (cancelled) {
-        return;
-      }
-
-      await loadListing(currentPath, session.accessToken);
-    };
-
-    void load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentPath, session]);
+  const { data: listing, isLoading, error } = useQuery({
+    queryKey: ['files', currentPath, session?.accessToken],
+    queryFn: async () => {
+      if (!session) throw new Error('no session');
+      const { data, error } = await getApiV1Files({
+        client: apiClient,
+        query: currentPath ? { path: currentPath } : undefined,
+        headers: { Authorization: `Bearer ${session.accessToken}` },
+      });
+      if (error) throw new Error((error as { error?: { message?: string } }).error?.message ?? 'listing failed');
+      return data ?? null;
+    },
+    enabled: !!session,
+  });
 
   if (!session) {
     return <Navigate replace to="/login" />;
@@ -174,9 +142,7 @@ export function DashboardPage() {
       <UploadPanel
         accessToken={session.accessToken}
         currentPath={currentPath}
-        onUploaded={async () => {
-          await loadListing(currentPath, session.accessToken);
-        }}
+        onUploaded={() => queryClient.invalidateQueries({ queryKey: ['files', currentPath] })}
       />
 
       <section className="rounded-lg border bg-card">
@@ -185,11 +151,7 @@ export function DashboardPage() {
             Loading folder contents...
           </p>
         ) : null}
-        {error ? (
-          <p className="p-4 text-sm text-muted-foreground text-destructive">
-            {error}
-          </p>
-        ) : null}
+        {error ? <p className="p-4 text-sm text-destructive">{(error as Error).message}</p> : null}
         {!isLoading && !error ? (
           <ul className="divide-y">
             {listing?.entries?.length ? (
