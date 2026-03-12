@@ -107,15 +107,14 @@ func toPrefix(path string) string {
 	return fmt.Sprintf("%s/", path)
 }
 
-// Upload handles single-file uploads with path validation and minimal filename validation.
+// Upload handles single-file uploads with path validation and filename sanitization.
 func (s *Service) Upload(ctx context.Context, userID, destinationPath, filename, contentType string, body io.Reader, size int64) (UploadResult, error) {
 	normalizedPath, err := validateDestinationPath(destinationPath)
 	if err != nil {
 		return UploadResult{}, err
 	}
 
-	// Validate filename (minimal sanitization for issue #1)
-	validatedFilename, err := validateFilename(filename)
+	sanitizedFilename, err := SanitizeFilename(filename)
 	if err != nil {
 		return UploadResult{}, err
 	}
@@ -123,17 +122,17 @@ func (s *Service) Upload(ctx context.Context, userID, destinationPath, filename,
 	// Construct S3 key: path/filename
 	var s3Key string
 	if normalizedPath == "" {
-		s3Key = validatedFilename
+		s3Key = sanitizedFilename.Stored
 	} else {
-		s3Key = fmt.Sprintf("%s/%s", normalizedPath, validatedFilename)
+		s3Key = fmt.Sprintf("%s/%s", normalizedPath, sanitizedFilename.Stored)
 	}
 
 	// Prepare metadata
 	now := time.Now().UTC()
 	uploadedAt := now.Format(time.RFC3339)
 	metadata := map[string]string{
-		"original-filename":   filename,
-		"stored-filename":     validatedFilename,
+		"original-filename":   sanitizedFilename.Original,
+		"stored-filename":     sanitizedFilename.Stored,
 		"uploaded-by-user-id": userID,
 		"uploaded-at":         uploadedAt,
 	}
@@ -157,38 +156,19 @@ func (s *Service) Upload(ctx context.Context, userID, destinationPath, filename,
 	}
 
 	return UploadResult{
-		Name:       validatedFilename,
+		Name:       sanitizedFilename.Stored,
 		Path:       s3Key,
 		Size:       size,
 		UploadedAt: uploadedAt,
 	}, nil
 }
 
-// validateFilename applies minimal filename validation for issue #1
-// Rules:
-// 1. Use provided filename, trim whitespace
-// 2. Reject path separators and traversal fragments (/, \, ..)
-// 3. Reject empty filenames
 func validateFilename(filename string) (string, error) {
-	// Trim whitespace
-	cleaned := strings.TrimSpace(filename)
-
-	// Reject empty
-	if cleaned == "" {
-		return "", errors.New("filename cannot be empty")
+	sanitized, err := SanitizeFilename(filename)
+	if err != nil {
+		return "", err
 	}
-
-	// Reject path separators
-	if strings.Contains(cleaned, "/") || strings.Contains(cleaned, "\\") {
-		return "", errors.New("filename cannot contain path separators")
-	}
-
-	// Reject traversal attempts
-	if strings.Contains(cleaned, "..") {
-		return "", errors.New("filename cannot contain traversal sequences")
-	}
-
-	return cleaned, nil
+	return sanitized.Stored, nil
 }
 
 func validateDestinationPath(rawPath string) (string, error) {
@@ -320,15 +300,20 @@ func (s *Service) UploadFolder(
 		// Extract basename (filename) from validated relative path
 		segments := strings.Split(validatedRelPath, "/")
 		basename := segments[len(segments)-1]
+		parentPath := strings.Join(segments[:len(segments)-1], "/")
 
-		// Validate filename
-		validatedFilename, err := validateFilename(basename)
+		sanitizedFilename, err := SanitizeFilename(basename)
 		if err != nil {
 			return nil, fmt.Errorf("%w: invalid filename at index %d: %v", ErrInvalidUploadInput, i, err)
 		}
 
+		sanitizedRelPath := sanitizedFilename.Stored
+		if parentPath != "" {
+			sanitizedRelPath = parentPath + "/" + sanitizedFilename.Stored
+		}
+
 		// Build final object key
-		finalKey := buildFinalObjectKey(normalizedDestPath, validatedRelPath)
+		finalKey := buildFinalObjectKey(normalizedDestPath, sanitizedRelPath)
 
 		// Check for duplicates within this batch
 		if seenKeys[finalKey] {
@@ -339,8 +324,8 @@ func (s *Service) UploadFolder(
 		// Create upload item
 		item := uploadItemInternal{
 			FinalKey:        finalKey,
-			Filename:        validatedFilename,
-			OriginalName:    basename,
+			Filename:        sanitizedFilename.Stored,
+			OriginalName:    sanitizedFilename.Original,
 			ContentType:     mfh.Header.Get("Content-Type"),
 			Size:            mfh.Size,
 			MultipartHeader: mfh,
