@@ -26,7 +26,14 @@ func NewRouter(logger *slog.Logger, dbConn *sql.DB, storageClient *storage.Clien
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(RequestLogger(logger))
-	router.Use(cors.Default())
+	router.Use(
+		cors.New(cors.Config{
+			AllowOrigins: []string{"http://127.0.0.1:5173", "http://localhost:5173"},
+			AllowMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+			AllowHeaders: []string{"Origin", "Content-Type", "Accept", "Authorization"},
+			ExposeHeaders: []string{"X-Request-Id"},
+		}),
+	)
 
 	// Swagger UI is served directly from the generated backend contract.
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))

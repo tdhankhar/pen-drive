@@ -58,3 +58,37 @@ Verification result:
 Commit:
 
 - `422dfa3 feat: generate frontend api client`
+
+### Checkpoint 3: Frontend auth shell
+
+Goal:
+
+- add login/signup routes and a protected dashboard route
+- wire the generated auth client into a session layer
+- persist tokens locally for this phase and restore via refresh on reload
+
+Verification steps:
+
+- `make backend-dev-up`
+- start backend with local S3-compatible settings
+- `make frontend-lint`
+- `make frontend-build`
+- verify unauthenticated `/app` redirects to `/login`
+- verify signup reaches dashboard
+- verify reload restores session through refresh flow
+
+Verification result:
+
+- passed on 2026-03-12
+- `make backend-dev-up`: passed
+- backend started locally against Postgres + MinIO: passed
+- `make frontend-lint`: passed
+- `make frontend-build`: passed
+- browser verification with Playwright: unauthenticated `/app` redirected to `/login`
+- browser verification with Playwright: signup reached `/app`
+- browser verification with Playwright: reload restored session via refresh flow and stayed on `/app`
+- TODO recorded: replace local-storage refresh token transport with secure HTTP-only cookies in a later phase
+
+Commit:
+
+- pending

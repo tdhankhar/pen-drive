@@ -1,8 +1,10 @@
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8080";
+
 export async function customFetch<T>(
   url: string,
   options: RequestInit = {},
 ): Promise<T> {
-  const response = await fetch(url, {
+  const response = await fetch(`${apiBaseUrl}${url}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -10,13 +12,12 @@ export async function customFetch<T>(
     },
   });
 
-  if (!response.ok) {
-    throw new Error(`request failed: ${response.status}`);
-  }
+  const data =
+    response.status === 204 ? undefined : ((await response.json()) as T);
 
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  return (await response.json()) as T;
+  return {
+    data: data as T,
+    headers: response.headers,
+    status: response.status,
+  } as T;
 }
