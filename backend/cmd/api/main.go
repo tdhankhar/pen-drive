@@ -9,8 +9,10 @@ import (
 	"time"
 
 	"github.com/abhishek/pen-drive/backend/internal/config"
+	"github.com/abhishek/pen-drive/backend/internal/db"
 	apphttp "github.com/abhishek/pen-drive/backend/internal/http"
 	"github.com/abhishek/pen-drive/backend/internal/logging"
+	"github.com/abhishek/pen-drive/backend/internal/storage"
 )
 
 func main() {
@@ -25,7 +27,25 @@ func main() {
 	}
 	defer closeLogs()
 
-	router := apphttp.NewRouter(logger)
+	dbConn, err := db.Open(cfg.Database)
+	if err != nil {
+		logger.Error("database connection failed", "error", err)
+		return
+	}
+	defer dbConn.Close()
+
+	if err := db.RunMigrations(dbConn); err != nil {
+		logger.Error("database migrations failed", "error", err)
+		return
+	}
+
+	storageClient, err := storage.NewClient(context.Background(), cfg.S3)
+	if err != nil {
+		logger.Error("storage client initialization failed", "error", err)
+		return
+	}
+
+	router := apphttp.NewRouter(logger, dbConn, storageClient)
 
 	server := &http.Server{
 		Addr:              cfg.HTTP.Address(),
