@@ -1,6 +1,6 @@
 APP_NAME=pen-drive
 
-.PHONY: backend-run backend-build backend-test backend-lint backend-tidy backend-dev-up backend-dev-down backend-openapi frontend-build frontend-lint
+.PHONY: backend-run backend-build backend-test backend-lint backend-tidy backend-dev-up backend-dev-down backend-openapi backend-s3-setup frontend-build frontend-lint
 
 backend-run:
 	cd backend && go run ./cmd/api
@@ -26,6 +26,10 @@ backend-dev-up:
 
 backend-dev-down:
 	docker-compose down
+
+backend-s3-setup:
+	@docker exec pen-drive-minio-1 mc alias set local http://localhost:9000 minioadmin minioadmin && \
+	docker exec pen-drive-minio-1 mc mb local/pen-drive || true
 
 frontend-build:
 	cd frontend && npm run build
