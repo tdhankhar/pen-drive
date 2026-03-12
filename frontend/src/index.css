@@ -73,6 +73,27 @@
   }
 }
 
+/* Uppy v5 theme overrides — remap palette vars to shadcn/slate tokens */
+:root {
+  /* primary action (blue-*) → shadcn primary (dark slate) */
+  --uppy-color-blue-500: oklch(0.208 0.042 264.695);
+  --uppy-color-blue-600: oklch(0.279 0.041 260.031);
+  --uppy-color-blue-700: oklch(0.129 0.042 264.695);
+  --uppy-color-blue-50: oklch(0.968 0.007 264.532);
+  /* gray scale → shadcn slate palette */
+  --uppy-color-gray-50: oklch(0.984 0.003 247.858);
+  --uppy-color-gray-100: oklch(0.968 0.007 264.532);
+  --uppy-color-gray-300: oklch(0.929 0.013 255.508);
+  --uppy-color-gray-500: oklch(0.554 0.046 257.417);
+  --uppy-color-gray-600: oklch(0.446 0.03 256.802);
+  /* border radius → shadcn radius */
+  --uppy-radius-lg: var(--radius, 0.625rem);
+}
+
+.uppy-reset {
+  font-family: inherit;
+}
+
 :root {
   --ink: #102a43;
   --ink-muted: #486581;
