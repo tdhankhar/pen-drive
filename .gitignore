@@ -1,3 +1,4 @@
 logs/*.log
 backend/.env
 .env.local
+.claude/worktrees/

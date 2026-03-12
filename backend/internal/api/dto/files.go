@@ -38,3 +38,54 @@ type UploadedFileInfo struct {
 type FileUploadResponse struct {
 	File UploadedFileInfo `json:"file"`
 }
+
+// FolderUploadRequest represents a folder upload request with multiple files
+// The actual files are in multipart form, but this DTO documents the structure
+type FolderUploadRequest struct {
+	// Files are the binary file contents (multipart form fields, repeated)
+	Files [][]byte
+	// RelativePaths are the relative paths for each file in the folder structure (repeated)
+	RelativePaths []string
+	// Path is the destination folder path within the user's bucket (optional)
+	Path string
+}
+
+// FolderUploadResponse is the response for a successful folder upload
+type FolderUploadResponse struct {
+	Files []UploadedFileInfo `json:"files"`
+}
+
+type MultipartUploadInitiateRequest struct {
+	Filename    string `json:"filename" example:"video.mp4"`
+	Path        string `json:"path,omitempty" example:"uploads/videos"`
+	ContentType string `json:"content_type,omitempty" example:"video/mp4"`
+	Size        int64  `json:"size" example:"7340032"`
+}
+
+type MultipartUploadInitiateResponse struct {
+	UploadID string `json:"upload_id" example:"upload-id"`
+	Key      string `json:"key" example:"uploads/videos/video.mp4"`
+	Name     string `json:"name" example:"video.mp4"`
+	PartSize int64  `json:"part_size" example:"5242880"`
+}
+
+type MultipartUploadPartResponse struct {
+	PartNumber int32  `json:"part_number" example:"1"`
+	ETag       string `json:"etag" example:"\"etag-value\""`
+}
+
+type MultipartCompletedPart struct {
+	PartNumber int32  `json:"part_number" example:"1"`
+	ETag       string `json:"etag" example:"\"etag-value\""`
+}
+
+type MultipartUploadCompleteRequest struct {
+	UploadID string                   `json:"upload_id" example:"upload-id"`
+	Key      string                   `json:"key" example:"uploads/videos/video.mp4"`
+	Parts    []MultipartCompletedPart `json:"parts"`
+}
+
+type MultipartUploadAbortRequest struct {
+	UploadID string `json:"upload_id" example:"upload-id"`
+	Key      string `json:"key" example:"uploads/videos/video.mp4"`
+}

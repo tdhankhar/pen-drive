@@ -4,13 +4,15 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "api:generate": "orval --config orval.config.ts",
+    "api:generate": "orval --config orval.config.ts && node scripts/fix-folder-upload-client.mjs",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint . && eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@uppy/core": "^5.2.0",
+    "@uppy/react": "^5.2.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.9.5"

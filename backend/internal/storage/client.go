@@ -14,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 
 	"github.com/abhishek/pen-drive/backend/internal/config"
 )
@@ -61,6 +62,50 @@ type PutObjectInput struct {
 type PutObjectResult struct {
 	Key  string
 	ETag string
+}
+
+type StartMultipartUploadInput struct {
+	Bucket      string
+	Key         string
+	ContentType string
+	Metadata    map[string]string
+}
+
+type StartMultipartUploadResult struct {
+	UploadID string
+	Key      string
+}
+
+type UploadPartInput struct {
+	Bucket     string
+	Key        string
+	UploadID   string
+	PartNumber int32
+	Body       io.Reader
+	Size       int64
+}
+
+type UploadPartResult struct {
+	ETag       string
+	PartNumber int32
+}
+
+type CompletedPart struct {
+	ETag       string
+	PartNumber int32
+}
+
+type CompleteMultipartUploadInput struct {
+	Bucket   string
+	Key      string
+	UploadID string
+	Parts    []CompletedPart
+}
+
+type AbortMultipartUploadInput struct {
+	Bucket   string
+	Key      string
+	UploadID string
 }
 
 type ObjectMetadata struct {
@@ -226,6 +271,112 @@ func (c *Client) PutObject(ctx context.Context, input PutObjectInput) (PutObject
 		Key:  input.Key,
 		ETag: aws.ToString(result.ETag),
 	}, nil
+}
+
+func (c *Client) StartMultipartUpload(ctx context.Context, input StartMultipartUploadInput) (StartMultipartUploadResult, error) {
+	_, err := c.s3.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: &input.Bucket,
+		Key:    &input.Key,
+	})
+	if err == nil {
+		return StartMultipartUploadResult{}, ErrObjectAlreadyExists
+	}
+	var responseErr *awshttp.ResponseError
+	if !errors.As(err, &responseErr) || responseErr.HTTPStatusCode() != 404 {
+		return StartMultipartUploadResult{}, fmt.Errorf("check object existence: %w", err)
+	}
+
+	contentType := input.ContentType
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	metadata := input.Metadata
+	if metadata == nil {
+		metadata = make(map[string]string)
+	}
+
+	result, err := c.s3.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
+		Bucket:      &input.Bucket,
+		Key:         &input.Key,
+		ContentType: aws.String(contentType),
+		Metadata:    metadata,
+	})
+	if err != nil {
+		return StartMultipartUploadResult{}, fmt.Errorf("start multipart upload %q in bucket %q: %w", input.Key, input.Bucket, err)
+	}
+
+	return StartMultipartUploadResult{
+		UploadID: aws.ToString(result.UploadId),
+		Key:      input.Key,
+	}, nil
+}
+
+func (c *Client) UploadPart(ctx context.Context, input UploadPartInput) (UploadPartResult, error) {
+	result, err := c.s3.UploadPart(ctx, &s3.UploadPartInput{
+		Bucket:        &input.Bucket,
+		Key:           &input.Key,
+		UploadId:      &input.UploadID,
+		PartNumber:    aws.Int32(input.PartNumber),
+		Body:          input.Body,
+		ContentLength: aws.Int64(input.Size),
+	})
+	if err != nil {
+		return UploadPartResult{}, fmt.Errorf(
+			"upload multipart part %d for %q in bucket %q: %w",
+			input.PartNumber,
+			input.Key,
+			input.Bucket,
+			err,
+		)
+	}
+
+	return UploadPartResult{
+		ETag:       aws.ToString(result.ETag),
+		PartNumber: input.PartNumber,
+	}, nil
+}
+
+func (c *Client) CompleteMultipartUpload(ctx context.Context, input CompleteMultipartUploadInput) (PutObjectResult, error) {
+	completedParts := make([]types.CompletedPart, 0, len(input.Parts))
+	for _, part := range input.Parts {
+		partNumber := part.PartNumber
+		etag := part.ETag
+		completedParts = append(completedParts, types.CompletedPart{
+			ETag:       aws.String(etag),
+			PartNumber: aws.Int32(partNumber),
+		})
+	}
+
+	result, err := c.s3.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
+		Bucket:   &input.Bucket,
+		Key:      &input.Key,
+		UploadId: &input.UploadID,
+		MultipartUpload: &types.CompletedMultipartUpload{
+			Parts: completedParts,
+		},
+	})
+	if err != nil {
+		return PutObjectResult{}, fmt.Errorf("complete multipart upload %q in bucket %q: %w", input.Key, input.Bucket, err)
+	}
+
+	return PutObjectResult{
+		Key:  input.Key,
+		ETag: aws.ToString(result.ETag),
+	}, nil
+}
+
+func (c *Client) AbortMultipartUpload(ctx context.Context, input AbortMultipartUploadInput) error {
+	_, err := c.s3.AbortMultipartUpload(ctx, &s3.AbortMultipartUploadInput{
+		Bucket:   &input.Bucket,
+		Key:      &input.Key,
+		UploadId: &input.UploadID,
+	})
+	if err != nil {
+		return fmt.Errorf("abort multipart upload %q in bucket %q: %w", input.Key, input.Bucket, err)
+	}
+
+	return nil
 }
 
 func emptyToNil(value string) *string {

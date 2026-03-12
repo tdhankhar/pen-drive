@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
 
+import { UploadPanel } from "../components/upload-panel";
 import { getApiV1Files } from "../lib/api/generated/client";
 import type {
   GithubComAbhishekPenDriveBackendInternalApiDtoFileListResponse,
@@ -21,6 +22,30 @@ export function DashboardPage() {
   const currentPath = searchParams.get("path") ?? "";
   const segments = currentPath.split("/").filter(Boolean);
 
+  async function loadListing(activePath: string, accessToken: string) {
+    setIsLoading(true);
+    setError(null);
+
+    const response = await getApiV1Files(
+      activePath ? { path: activePath } : undefined,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    );
+
+    if (response.status !== 200) {
+      setError(response.data.error?.message ?? "listing failed");
+      setListing(null);
+      setIsLoading(false);
+      return;
+    }
+
+    setListing(response.data);
+    setIsLoading(false);
+  }
+
   useEffect(() => {
     if (!session) {
       return;
@@ -29,31 +54,11 @@ export function DashboardPage() {
     let cancelled = false;
 
     const load = async () => {
-      setIsLoading(true);
-      setError(null);
-
-      const response = await getApiV1Files(
-        currentPath ? { path: currentPath } : undefined,
-        {
-          headers: {
-            Authorization: `Bearer ${session.accessToken}`,
-          },
-        },
-      );
-
       if (cancelled) {
         return;
       }
 
-      if (response.status !== 200) {
-        setError(response.data.error?.message ?? "listing failed");
-        setListing(null);
-        setIsLoading(false);
-        return;
-      }
-
-      setListing(response.data);
-      setIsLoading(false);
+      await loadListing(currentPath, session.accessToken);
     };
 
     void load();
@@ -131,6 +136,14 @@ export function DashboardPage() {
           </p>
         </article>
       </section>
+
+      <UploadPanel
+        accessToken={session.accessToken}
+        currentPath={currentPath}
+        onUploaded={async () => {
+          await loadListing(currentPath, session.accessToken);
+        }}
+      />
 
       <section className="browser-panel">
         {isLoading ? <p className="browser-state">Loading folder contents...</p> : null}

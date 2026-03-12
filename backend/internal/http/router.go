@@ -96,6 +96,11 @@ func NewRouter(logger *slog.Logger, dbConn *sql.DB, storageClient *storage.Clien
 	api.GET("/me", authHandler.AuthMiddleware(), authHandler.Me)
 	api.GET("/files", authHandler.AuthMiddleware(), filesHandler.List)
 	api.POST("/files/upload", authHandler.AuthMiddleware(), filesHandler.Upload)
+	api.POST("/files/upload-folder", authHandler.AuthMiddleware(), filesHandler.UploadFolder)
+	api.POST("/files/upload-multipart/initiate", authHandler.AuthMiddleware(), filesHandler.InitiateMultipartUpload)
+	api.POST("/files/upload-multipart/part", authHandler.AuthMiddleware(), filesHandler.UploadMultipartPart)
+	api.POST("/files/upload-multipart/complete", authHandler.AuthMiddleware(), filesHandler.CompleteMultipartUpload)
+	api.POST("/files/upload-multipart/abort", authHandler.AuthMiddleware(), filesHandler.AbortMultipartUpload)
 
 	return router
 }

@@ -13,8 +13,10 @@ import type {
   GithubComAbhishekPenDriveBackendInternalApiDtoErrorResponse,
   GithubComAbhishekPenDriveBackendInternalApiDtoFileListResponse,
   GithubComAbhishekPenDriveBackendInternalApiDtoFileUploadResponse,
+  GithubComAbhishekPenDriveBackendInternalApiDtoFolderUploadResponse,
   GithubComAbhishekPenDriveBackendInternalApiDtoRefreshRequest,
-  PostApiV1FilesUploadBody
+  PostApiV1FilesUploadBody,
+  PostApiV1FilesUploadFolderBody
 } from './model';
 
 import { customFetch } from '../http';
@@ -297,6 +299,76 @@ if(postApiV1FilesUploadBody.filename !== undefined) {
  }
 
   return customFetch<postApiV1FilesUploadResponse>(getPostApiV1FilesUploadUrl(),
+  {      
+    ...options,
+    method: 'POST'
+    ,
+    body: 
+      formData,
+  }
+);}
+  
+
+
+/**
+ * Upload multiple files to a destination folder in the user's bucket, preserving relative paths
+ * @summary Upload folder
+ */
+export type postApiV1FilesUploadFolderResponse201 = {
+  data: GithubComAbhishekPenDriveBackendInternalApiDtoFolderUploadResponse
+  status: 201
+}
+
+export type postApiV1FilesUploadFolderResponse400 = {
+  data: GithubComAbhishekPenDriveBackendInternalApiDtoErrorResponse
+  status: 400
+}
+
+export type postApiV1FilesUploadFolderResponse401 = {
+  data: GithubComAbhishekPenDriveBackendInternalApiDtoErrorResponse
+  status: 401
+}
+
+export type postApiV1FilesUploadFolderResponse409 = {
+  data: GithubComAbhishekPenDriveBackendInternalApiDtoErrorResponse
+  status: 409
+}
+
+export type postApiV1FilesUploadFolderResponse500 = {
+  data: GithubComAbhishekPenDriveBackendInternalApiDtoErrorResponse
+  status: 500
+}
+
+export type postApiV1FilesUploadFolderResponseSuccess = (postApiV1FilesUploadFolderResponse201) & {
+  headers: Headers;
+};
+export type postApiV1FilesUploadFolderResponseError = (postApiV1FilesUploadFolderResponse400 | postApiV1FilesUploadFolderResponse401 | postApiV1FilesUploadFolderResponse409 | postApiV1FilesUploadFolderResponse500) & {
+  headers: Headers;
+};
+
+export type postApiV1FilesUploadFolderResponse = (postApiV1FilesUploadFolderResponseSuccess | postApiV1FilesUploadFolderResponseError)
+
+export const getPostApiV1FilesUploadFolderUrl = () => {
+
+
+  
+
+  return `/api/v1/files/upload-folder`
+}
+
+export const postApiV1FilesUploadFolder = async (postApiV1FilesUploadFolderBody: PostApiV1FilesUploadFolderBody, options?: RequestInit): Promise<postApiV1FilesUploadFolderResponse> => {
+    const formData = new FormData();
+postApiV1FilesUploadFolderBody.files.forEach((file) => {
+ formData.append(`files`, file);
+});
+postApiV1FilesUploadFolderBody.relative_paths.forEach((relativePath) => {
+ formData.append(`relative_paths`, relativePath);
+});
+if(postApiV1FilesUploadFolderBody.path !== undefined) {
+ formData.append(`path`, postApiV1FilesUploadFolderBody.path);
+ }
+
+  return customFetch<postApiV1FilesUploadFolderResponse>(getPostApiV1FilesUploadFolderUrl(),
   {      
     ...options,
     method: 'POST'
