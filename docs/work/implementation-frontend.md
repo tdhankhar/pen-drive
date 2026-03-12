@@ -91,4 +91,4 @@ Verification result:
 
 Commit:
 
-- pending
+- `1b96b79 feat: add frontend auth shell`
