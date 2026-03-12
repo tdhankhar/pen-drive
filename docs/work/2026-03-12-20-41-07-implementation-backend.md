@@ -6,6 +6,45 @@ This file tracks backend-only implementation progress, verification evidence, an
 
 ## Checkpoints
 
+### Checkpoint 6: Upload API and duplicate-resolution contract
+
+Goal:
+
+- add authenticated upload endpoints for file and folder ingestion through the Go backend
+- support destination path selection within the user's bucket
+- define and implement duplicate detection before writes
+- support rename-vs-replace decisioning as an explicit backend contract
+
+Planned scope:
+
+- single-file upload endpoint
+- folder upload endpoint contract with relative paths preserved
+- duplicate preview endpoint or preflight response shape
+- rename strategy using `filename_(1).ext`
+- replace strategy that moves existing objects to `trash/<original-path>` before writing new objects
+- storage-layer helpers for existence checks, safe rename generation, and trash moves
+- DTOs and OpenAPI annotations for the upload and duplicate flows
+
+Verification steps:
+
+- `make backend-dev-up`
+- start backend with local S3-compatible settings
+- seed conflicting and non-conflicting objects in a test user bucket
+- `make backend-build`
+- `go test ./...`
+- verify non-conflicting single-file upload succeeds
+- verify duplicate preview reports impacted files
+- verify rename mode writes suffixed object names
+- verify replace mode moves originals to `trash/<original-path>` before writing new objects
+
+Verification result:
+
+- pending
+
+Commit:
+
+- pending
+
 ### Checkpoint 5: File listing API
 
 Goal:

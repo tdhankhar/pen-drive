@@ -6,6 +6,42 @@ This file tracks frontend-only implementation progress, verification evidence, a
 
 ## Checkpoints
 
+### Checkpoint 5: Upload UI and destination-path flow
+
+Goal:
+
+- add upload controls to the dashboard
+- support file and folder selection
+- preserve folder-relative paths under the selected destination
+- integrate duplicate preview and rename-vs-replace choices with backend upload APIs
+
+Planned scope:
+
+- uploader entry point in dashboard shell
+- selected destination folder derived from current browser path
+- upload request wiring from generated API client
+- duplicate-impact preview UI
+- user choice for `rename` or `replace`
+- optimistic refresh of the current listing after successful upload
+
+Verification steps:
+
+- regenerate backend OpenAPI
+- regenerate frontend API client
+- `make frontend-lint`
+- `make frontend-build`
+- browser verification: upload a non-conflicting file into root
+- browser verification: upload a folder into a nested destination and preserve relative paths
+- browser verification: duplicate preview appears and rename/replace both behave correctly
+
+Verification result:
+
+- pending
+
+Commit:
+
+- pending
+
 ### Checkpoint 4: File browser shell wired to list API
 
 Goal:
