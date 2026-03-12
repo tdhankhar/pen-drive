@@ -1,11 +1,7 @@
-import {
-  createContext,
-  startTransition,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { createContext, useState } from "react";
 import type { ReactNode } from "react";
+
+import { useQuery } from "@tanstack/react-query";
 
 import {
   clearSession,
@@ -33,49 +29,26 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<SessionState | null>(() => readSession());
-  const [isLoading, setIsLoading] = useState(true);
-  const hasBootstrapped = useRef(false);
 
-  useEffect(() => {
-    if (hasBootstrapped.current) {
-      return;
-    }
-
-    hasBootstrapped.current = true;
-    let cancelled = false;
-
-    const bootstrap = async () => {
+  const { isLoading } = useQuery({
+    queryKey: ["session-restore"],
+    queryFn: async () => {
       const existing = readSession();
-      if (!existing) {
-        setIsLoading(false);
-        return;
-      }
-
+      if (!existing) return null;
       try {
         const restored = await restoreSession();
-        if (!cancelled) {
-          startTransition(() => {
-            setSession(restored);
-            setIsLoading(false);
-          });
-        }
+        setSession(restored);
+        return restored;
       } catch {
-        if (!cancelled) {
-          clearSession();
-          startTransition(() => {
-            setSession(null);
-            setIsLoading(false);
-          });
-        }
+        clearSession();
+        setSession(null);
+        return null;
       }
-    };
-
-    void bootstrap();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    },
+    staleTime: Infinity,
+    gcTime: 0,
+    retry: false,
+  });
 
   const value: AuthContextValue = {
     isLoading,
