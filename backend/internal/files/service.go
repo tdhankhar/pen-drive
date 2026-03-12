@@ -41,6 +41,12 @@ type MultipartUploadSession struct {
 	PartSize int64
 }
 
+type duplicateResolution struct {
+	RequestedKey string
+	FinalKey     string
+	Conflict     bool
+}
+
 type storageClient interface {
 	ListPath(ctx context.Context, input storage.ListPathInput) (storage.ListPathResult, error)
 	PutObject(ctx context.Context, input storage.PutObjectInput) (storage.PutObjectResult, error)
@@ -48,6 +54,10 @@ type storageClient interface {
 	UploadPart(ctx context.Context, input storage.UploadPartInput) (storage.UploadPartResult, error)
 	CompleteMultipartUpload(ctx context.Context, input storage.CompleteMultipartUploadInput) (storage.PutObjectResult, error)
 	AbortMultipartUpload(ctx context.Context, input storage.AbortMultipartUploadInput) error
+	ObjectExists(ctx context.Context, input storage.ObjectExistsInput) (bool, error)
+	ListObjectKeys(ctx context.Context, input storage.ListObjectKeysInput) ([]string, error)
+	CopyObject(ctx context.Context, input storage.CopyObjectInput) error
+	DeleteObject(ctx context.Context, input storage.DeleteObjectInput) error
 }
 
 func NewService(storageClient storageClient) *Service {
@@ -120,59 +130,128 @@ func toPrefix(path string) string {
 	return fmt.Sprintf("%s/", path)
 }
 
-// Upload handles single-file uploads with path validation and filename sanitization.
-func (s *Service) Upload(ctx context.Context, userID, destinationPath, filename, contentType string, body io.Reader, size int64) (UploadResult, error) {
-	normalizedPath, err := validateDestinationPath(destinationPath)
+// Upload handles single-file uploads with path validation, duplicate resolution, and filename sanitization.
+func (s *Service) Upload(
+	ctx context.Context,
+	userID,
+	destinationPath,
+	filename,
+	contentType string,
+	body io.Reader,
+	size int64,
+	conflictPolicy dto.DuplicateConflictPolicy,
+) (UploadResult, error) {
+	normalizedPolicy, err := parseConflictPolicy(string(conflictPolicy))
 	if err != nil {
 		return UploadResult{}, err
 	}
 
-	sanitizedFilename, err := SanitizeFilename(filename)
+	requestedKey, originalName, _, err := buildSingleUploadRequest(destinationPath, filename)
 	if err != nil {
 		return UploadResult{}, err
 	}
 
-	// Construct S3 key: path/filename
-	var s3Key string
-	if normalizedPath == "" {
-		s3Key = sanitizedFilename.Stored
-	} else {
-		s3Key = fmt.Sprintf("%s/%s", normalizedPath, sanitizedFilename.Stored)
+	resolution, err := s.resolveUploadKey(ctx, userID, requestedKey, normalizedPolicy, nil)
+	if err != nil {
+		if errors.Is(err, storage.ErrObjectAlreadyExists) {
+			return UploadResult{}, fmt.Errorf("object already exists: %s", requestedKey)
+		}
+		return UploadResult{}, err
 	}
 
-	// Prepare metadata
+	if resolution.Conflict && normalizedPolicy == dto.DuplicateConflictPolicyReplace {
+		if err := s.moveObjectToTrash(ctx, userID, requestedKey); err != nil {
+			return UploadResult{}, err
+		}
+	}
+
 	now := time.Now().UTC()
 	uploadedAt := now.Format(time.RFC3339)
+	storedFilename := path.Base(resolution.FinalKey)
 	metadata := map[string]string{
-		"original-filename":   sanitizedFilename.Original,
-		"stored-filename":     sanitizedFilename.Stored,
+		"original-filename":   originalName,
+		"stored-filename":     storedFilename,
 		"uploaded-by-user-id": userID,
 		"uploaded-at":         uploadedAt,
 	}
 
-	// Upload to storage
-	putInput := storage.PutObjectInput{
+	_, err = s.storage.PutObject(ctx, storage.PutObjectInput{
 		Bucket:      userID,
-		Key:         s3Key,
+		Key:         resolution.FinalKey,
 		Body:        body,
 		Size:        size,
 		ContentType: contentType,
 		Metadata:    metadata,
-	}
-
-	_, err = s.storage.PutObject(ctx, putInput)
+	})
 	if err != nil {
 		if errors.Is(err, storage.ErrObjectAlreadyExists) {
-			return UploadResult{}, fmt.Errorf("object already exists: %s", s3Key)
+			return UploadResult{}, fmt.Errorf("object already exists: %s", resolution.FinalKey)
 		}
 		return UploadResult{}, err
 	}
 
 	return UploadResult{
-		Name:       sanitizedFilename.Stored,
-		Path:       s3Key,
+		Name:       storedFilename,
+		Path:       resolution.FinalKey,
 		Size:       size,
 		UploadedAt: uploadedAt,
+	}, nil
+}
+
+func (s *Service) PreviewDuplicates(
+	ctx context.Context,
+	userID string,
+	destinationPath string,
+	filename string,
+	relativePaths []string,
+) (dto.DuplicatePreviewResponse, error) {
+	if strings.TrimSpace(filename) == "" && len(relativePaths) == 0 {
+		return dto.DuplicatePreviewResponse{}, fmt.Errorf("%w: filename or relative_paths is required", ErrInvalidUploadInput)
+	}
+
+	reserved := make(map[string]bool)
+	items := make([]dto.DuplicatePreviewItem, 0, max(1, len(relativePaths)))
+
+	if strings.TrimSpace(filename) != "" {
+		requestedKey, _, _, err := buildSingleUploadRequest(destinationPath, filename)
+		if err != nil {
+			return dto.DuplicatePreviewResponse{}, fmt.Errorf("%w: %v", ErrInvalidUploadInput, err)
+		}
+
+		item, err := s.buildDuplicatePreviewItem(ctx, userID, requestedKey, reserved)
+		if err != nil {
+			return dto.DuplicatePreviewResponse{}, err
+		}
+		items = append(items, item)
+	} else {
+		requestedKeys, err := buildFolderRequestedKeys(destinationPath, relativePaths)
+		if err != nil {
+			return dto.DuplicatePreviewResponse{}, err
+		}
+
+		for _, requestedKey := range requestedKeys {
+			item, err := s.buildDuplicatePreviewItem(ctx, userID, requestedKey, reserved)
+			if err != nil {
+				return dto.DuplicatePreviewResponse{}, err
+			}
+			items = append(items, item)
+		}
+	}
+
+	impactedPaths := make([]string, 0)
+	hasConflicts := false
+	for _, item := range items {
+		if !item.Conflict {
+			continue
+		}
+		hasConflicts = true
+		impactedPaths = append(impactedPaths, item.ExistingPath)
+	}
+
+	return dto.DuplicatePreviewResponse{
+		HasConflicts:  hasConflicts,
+		ImpactedPaths: impactedPaths,
+		Items:         items,
 	}, nil
 }
 
@@ -274,37 +353,47 @@ func (s *Service) InitiateMultipartUpload(
 	destinationPath string,
 	filename string,
 	contentType string,
+	conflictPolicy dto.DuplicateConflictPolicy,
 ) (MultipartUploadSession, error) {
-	normalizedPath, err := validateDestinationPath(destinationPath)
+	normalizedPolicy, err := parseConflictPolicy(string(conflictPolicy))
 	if err != nil {
-		return MultipartUploadSession{}, fmt.Errorf("%w: invalid destination path: %v", ErrInvalidUploadInput, err)
+		return MultipartUploadSession{}, err
 	}
 
-	sanitizedFilename, err := SanitizeFilename(filename)
+	requestedKey, originalName, _, err := buildSingleUploadRequest(destinationPath, filename)
 	if err != nil {
-		return MultipartUploadSession{}, fmt.Errorf("%w: invalid filename: %v", ErrInvalidUploadInput, err)
+		return MultipartUploadSession{}, fmt.Errorf("%w: %v", ErrInvalidUploadInput, err)
 	}
 
-	finalKey := sanitizedFilename.Stored
-	if normalizedPath != "" {
-		finalKey = fmt.Sprintf("%s/%s", normalizedPath, sanitizedFilename.Stored)
+	resolution, err := s.resolveUploadKey(ctx, userID, requestedKey, normalizedPolicy, nil)
+	if err != nil {
+		if errors.Is(err, storage.ErrObjectAlreadyExists) {
+			return MultipartUploadSession{}, fmt.Errorf("%w: %s", storage.ErrObjectAlreadyExists, requestedKey)
+		}
+		return MultipartUploadSession{}, err
+	}
+
+	if resolution.Conflict && normalizedPolicy == dto.DuplicateConflictPolicyReplace {
+		if err := s.moveObjectToTrash(ctx, userID, requestedKey); err != nil {
+			return MultipartUploadSession{}, err
+		}
 	}
 
 	uploadedAt := time.Now().UTC().Format(time.RFC3339)
 	result, err := s.storage.StartMultipartUpload(ctx, storage.StartMultipartUploadInput{
 		Bucket:      userID,
-		Key:         finalKey,
+		Key:         resolution.FinalKey,
 		ContentType: contentType,
 		Metadata: map[string]string{
-			"original-filename":   sanitizedFilename.Original,
-			"stored-filename":     sanitizedFilename.Stored,
+			"original-filename":   originalName,
+			"stored-filename":     path.Base(resolution.FinalKey),
 			"uploaded-by-user-id": userID,
 			"uploaded-at":         uploadedAt,
 		},
 	})
 	if err != nil {
 		if errors.Is(err, storage.ErrObjectAlreadyExists) {
-			return MultipartUploadSession{}, fmt.Errorf("%w: %s", storage.ErrObjectAlreadyExists, finalKey)
+			return MultipartUploadSession{}, fmt.Errorf("%w: %s", storage.ErrObjectAlreadyExists, resolution.FinalKey)
 		}
 		return MultipartUploadSession{}, err
 	}
@@ -312,7 +401,7 @@ func (s *Service) InitiateMultipartUpload(
 	return MultipartUploadSession{
 		UploadID: result.UploadID,
 		Key:      result.Key,
-		Name:     sanitizedFilename.Stored,
+		Name:     path.Base(resolution.FinalKey),
 		PartSize: multipartPartSize,
 	}, nil
 }
@@ -401,7 +490,13 @@ func (s *Service) UploadFolder(
 	destinationPath string,
 	multipartFiles []*multipart.FileHeader,
 	relativePaths []string,
+	conflictPolicy dto.DuplicateConflictPolicy,
 ) ([]UploadResult, error) {
+	normalizedPolicy, err := parseConflictPolicy(string(conflictPolicy))
+	if err != nil {
+		return nil, err
+	}
+
 	if len(multipartFiles) == 0 {
 		return nil, fmt.Errorf("%w: files field is required", ErrInvalidUploadInput)
 	}
@@ -412,86 +507,69 @@ func (s *Service) UploadFolder(
 		return nil, fmt.Errorf("%w: files and relative_paths counts must match", ErrInvalidUploadInput)
 	}
 
-	// Validate destination path once
-	normalizedDestPath, err := validateDestinationPath(destinationPath)
+	requestedKeys, err := buildFolderRequestedKeys(destinationPath, relativePaths)
 	if err != nil {
-		return nil, fmt.Errorf("%w: invalid destination path: %v", ErrInvalidUploadInput, err)
+		return nil, err
 	}
 
-	// Phase 1: Validate all inputs and build upload items
 	uploadItems := make([]uploadItemInternal, 0, len(multipartFiles))
-	seenKeys := make(map[string]bool)
 	now := time.Now().UTC()
 	uploadedAt := now.Format(time.RFC3339)
+	reservedKeys := make(map[string]bool)
 
 	for i, mfh := range multipartFiles {
-		// Check zero-byte file
 		if mfh.Size == 0 {
 			return nil, fmt.Errorf("%w: file at index %d", ErrZeroByteFile, i)
 		}
 
-		// Validate relative path
 		validatedRelPath, err := validateRelativePath(relativePaths[i])
 		if err != nil {
 			return nil, fmt.Errorf("%w: invalid relative path at index %d: %v", ErrInvalidUploadInput, i, err)
 		}
 
-		// Extract basename (filename) from validated relative path
 		segments := strings.Split(validatedRelPath, "/")
-		basename := segments[len(segments)-1]
-		parentPath := strings.Join(segments[:len(segments)-1], "/")
-
-		sanitizedFilename, err := SanitizeFilename(basename)
+		originalName := segments[len(segments)-1]
+		requestedKey := requestedKeys[i]
+		resolution, err := s.resolveUploadKey(ctx, userID, requestedKey, normalizedPolicy, reservedKeys)
 		if err != nil {
-			return nil, fmt.Errorf("%w: invalid filename at index %d: %v", ErrInvalidUploadInput, i, err)
+			if errors.Is(err, storage.ErrObjectAlreadyExists) {
+				return nil, fmt.Errorf("%w: %s", storage.ErrObjectAlreadyExists, requestedKey)
+			}
+			return nil, err
 		}
 
-		sanitizedRelPath := sanitizedFilename.Stored
-		if parentPath != "" {
-			sanitizedRelPath = parentPath + "/" + sanitizedFilename.Stored
-		}
-
-		// Build final object key
-		finalKey := buildFinalObjectKey(normalizedDestPath, sanitizedRelPath)
-
-		// Check for duplicates within this batch
-		if seenKeys[finalKey] {
-			return nil, fmt.Errorf("%w: %s", ErrDuplicateBatchKey, finalKey)
-		}
-		seenKeys[finalKey] = true
-
-		// Create upload item
 		item := uploadItemInternal{
-			FinalKey:        finalKey,
-			Filename:        sanitizedFilename.Stored,
-			OriginalName:    sanitizedFilename.Original,
+			RequestedKey:    requestedKey,
+			FinalKey:        resolution.FinalKey,
+			Filename:        path.Base(resolution.FinalKey),
+			OriginalName:    originalName,
 			ContentType:     mfh.Header.Get("Content-Type"),
 			Size:            mfh.Size,
 			MultipartHeader: mfh,
 			UploadedAt:      uploadedAt,
+			Conflict:        resolution.Conflict,
 		}
 		uploadItems = append(uploadItems, item)
 	}
 
-	// Phase 2: Check for duplicate existing keys in storage
-	// Note: This is a simplified check. In production, you might batch-check or rely on PutObject's ErrObjectAlreadyExists
-	// For now, we'll let the PutObject call handle it
-
-	// Phase 3: Upload files in deterministic order (sorted by final key)
 	sort.Slice(uploadItems, func(i, j int) bool {
 		return uploadItems[i].FinalKey < uploadItems[j].FinalKey
 	})
 
 	results := make([]UploadResult, 0, len(uploadItems))
 	for _, item := range uploadItems {
-		// Open file
+		if item.Conflict && normalizedPolicy == dto.DuplicateConflictPolicyReplace {
+			if err := s.moveObjectToTrash(ctx, userID, item.RequestedKey); err != nil {
+				return nil, err
+			}
+		}
+
 		src, err := item.MultipartHeader.Open()
 		if err != nil {
 			return nil, fmt.Errorf("failed to open file %s: %w", item.Filename, err)
 		}
 		defer src.Close()
 
-		// Prepare metadata
 		metadata := map[string]string{
 			"original-filename":   item.OriginalName,
 			"stored-filename":     item.Filename,
@@ -499,7 +577,6 @@ func (s *Service) UploadFolder(
 			"uploaded-at":         item.UploadedAt,
 		}
 
-		// Upload to storage
 		putInput := storage.PutObjectInput{
 			Bucket:      userID,
 			Key:         item.FinalKey,
@@ -530,6 +607,7 @@ func (s *Service) UploadFolder(
 
 // uploadItemInternal represents an internal upload item with all metadata
 type uploadItemInternal struct {
+	RequestedKey    string
 	FinalKey        string
 	Filename        string
 	OriginalName    string
@@ -537,4 +615,218 @@ type uploadItemInternal struct {
 	Size            int64
 	MultipartHeader *multipart.FileHeader
 	UploadedAt      string
+	Conflict        bool
+}
+
+func buildSingleUploadRequest(destinationPath, filename string) (string, string, string, error) {
+	normalizedPath, err := validateDestinationPath(destinationPath)
+	if err != nil {
+		return "", "", "", err
+	}
+
+	sanitizedFilename, err := SanitizeFilename(filename)
+	if err != nil {
+		return "", "", "", err
+	}
+
+	requestedKey := buildFinalObjectKey(normalizedPath, sanitizedFilename.Stored)
+	return requestedKey, sanitizedFilename.Original, sanitizedFilename.Stored, nil
+}
+
+func buildFolderRequestedKeys(destinationPath string, relativePaths []string) ([]string, error) {
+	normalizedDestPath, err := validateDestinationPath(destinationPath)
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid destination path: %v", ErrInvalidUploadInput, err)
+	}
+
+	requestedKeys := make([]string, 0, len(relativePaths))
+	seenKeys := make(map[string]bool, len(relativePaths))
+
+	for i, relativePath := range relativePaths {
+		validatedRelPath, err := validateRelativePath(relativePath)
+		if err != nil {
+			return nil, fmt.Errorf("%w: invalid relative path at index %d: %v", ErrInvalidUploadInput, i, err)
+		}
+
+		segments := strings.Split(validatedRelPath, "/")
+		basename := segments[len(segments)-1]
+		parentPath := strings.Join(segments[:len(segments)-1], "/")
+
+		sanitizedFilename, err := SanitizeFilename(basename)
+		if err != nil {
+			return nil, fmt.Errorf("%w: invalid filename at index %d: %v", ErrInvalidUploadInput, i, err)
+		}
+
+		sanitizedRelPath := sanitizedFilename.Stored
+		if parentPath != "" {
+			sanitizedRelPath = parentPath + "/" + sanitizedFilename.Stored
+		}
+
+		requestedKey := buildFinalObjectKey(normalizedDestPath, sanitizedRelPath)
+		if seenKeys[requestedKey] {
+			return nil, fmt.Errorf("%w: %s", ErrDuplicateBatchKey, requestedKey)
+		}
+		seenKeys[requestedKey] = true
+		requestedKeys = append(requestedKeys, requestedKey)
+	}
+
+	return requestedKeys, nil
+}
+
+func parseConflictPolicy(rawPolicy string) (dto.DuplicateConflictPolicy, error) {
+	policy := dto.DuplicateConflictPolicy(strings.TrimSpace(rawPolicy))
+	if policy == "" {
+		return dto.DuplicateConflictPolicyReject, nil
+	}
+
+	switch policy {
+	case dto.DuplicateConflictPolicyReject, dto.DuplicateConflictPolicyRename, dto.DuplicateConflictPolicyReplace:
+		return policy, nil
+	default:
+		return "", fmt.Errorf("%w: unsupported conflict policy %q", ErrInvalidUploadInput, rawPolicy)
+	}
+}
+
+func (s *Service) buildDuplicatePreviewItem(
+	ctx context.Context,
+	userID string,
+	requestedKey string,
+	reservedKeys map[string]bool,
+) (dto.DuplicatePreviewItem, error) {
+	exists, err := s.objectExists(ctx, userID, requestedKey)
+	if err != nil {
+		return dto.DuplicatePreviewItem{}, err
+	}
+
+	item := dto.DuplicatePreviewItem{
+		RequestedPath: requestedKey,
+		Conflict:      exists,
+	}
+	if !exists {
+		reservedKeys[requestedKey] = true
+		return item, nil
+	}
+
+	item.ExistingPath = requestedKey
+	renamePath, err := s.findNextAvailableKey(ctx, userID, requestedKey, reservedKeys)
+	if err != nil {
+		return dto.DuplicatePreviewItem{}, err
+	}
+	item.RenamePath = renamePath
+	return item, nil
+}
+
+func (s *Service) resolveUploadKey(
+	ctx context.Context,
+	userID string,
+	requestedKey string,
+	conflictPolicy dto.DuplicateConflictPolicy,
+	reservedKeys map[string]bool,
+) (duplicateResolution, error) {
+	if reservedKeys == nil {
+		reservedKeys = make(map[string]bool)
+	}
+
+	exists, err := s.objectExists(ctx, userID, requestedKey)
+	if err != nil {
+		return duplicateResolution{}, err
+	}
+
+	if !exists && !reservedKeys[requestedKey] {
+		reservedKeys[requestedKey] = true
+		return duplicateResolution{
+			RequestedKey: requestedKey,
+			FinalKey:     requestedKey,
+			Conflict:     false,
+		}, nil
+	}
+
+	switch conflictPolicy {
+	case dto.DuplicateConflictPolicyReplace:
+		reservedKeys[requestedKey] = true
+		return duplicateResolution{
+			RequestedKey: requestedKey,
+			FinalKey:     requestedKey,
+			Conflict:     exists,
+		}, nil
+	case dto.DuplicateConflictPolicyRename:
+		finalKey, err := s.findNextAvailableKey(ctx, userID, requestedKey, reservedKeys)
+		if err != nil {
+			return duplicateResolution{}, err
+		}
+		return duplicateResolution{
+			RequestedKey: requestedKey,
+			FinalKey:     finalKey,
+			Conflict:     true,
+		}, nil
+	case dto.DuplicateConflictPolicyReject:
+		fallthrough
+	default:
+		return duplicateResolution{}, storage.ErrObjectAlreadyExists
+	}
+}
+
+func (s *Service) findNextAvailableKey(
+	ctx context.Context,
+	userID string,
+	requestedKey string,
+	reservedKeys map[string]bool,
+) (string, error) {
+	dir := path.Dir(requestedKey)
+	if dir == "." {
+		dir = ""
+	}
+	filename := path.Base(requestedKey)
+	ext := path.Ext(filename)
+	base := strings.TrimSuffix(filename, ext)
+
+	for suffix := 1; ; suffix++ {
+		candidateName := fmt.Sprintf("%s_(%d)%s", base, suffix, ext)
+		candidateKey := candidateName
+		if dir != "" {
+			candidateKey = dir + "/" + candidateName
+		}
+
+		if reservedKeys[candidateKey] {
+			continue
+		}
+
+		exists, err := s.objectExists(ctx, userID, candidateKey)
+		if err != nil {
+			return "", err
+		}
+		if exists {
+			continue
+		}
+
+		reservedKeys[candidateKey] = true
+		return candidateKey, nil
+	}
+}
+
+func (s *Service) objectExists(ctx context.Context, userID string, key string) (bool, error) {
+	return s.storage.ObjectExists(ctx, storage.ObjectExistsInput{
+		Bucket: userID,
+		Key:    key,
+	})
+}
+
+func (s *Service) moveObjectToTrash(ctx context.Context, userID string, key string) error {
+	trashKey := path.Join("trash", key)
+	if err := s.storage.CopyObject(ctx, storage.CopyObjectInput{
+		Bucket:         userID,
+		SourceKey:      key,
+		DestinationKey: trashKey,
+	}); err != nil {
+		return err
+	}
+
+	if err := s.storage.DeleteObject(ctx, storage.DeleteObjectInput{
+		Bucket: userID,
+		Key:    key,
+	}); err != nil {
+		return err
+	}
+
+	return nil
 }

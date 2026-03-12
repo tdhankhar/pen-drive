@@ -10,21 +10,29 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/abhishek/pen-drive/backend/internal/api/dto"
 	"github.com/abhishek/pen-drive/backend/internal/storage"
 )
 
 type stubStorageClient struct {
-	putInputs                   []storage.PutObjectInput
-	putErr                      error
-	putErrFor                   map[string]error
-	startMultipartInput         storage.StartMultipartUploadInput
-	startMultipartErr           error
-	uploadPartInputs            []storage.UploadPartInput
-	uploadPartErr               error
-	completeMultipartInput      storage.CompleteMultipartUploadInput
-	completeMultipartErr        error
-	abortMultipartInput         storage.AbortMultipartUploadInput
-	abortMultipartErr           error
+	putInputs              []storage.PutObjectInput
+	putErr                 error
+	putErrFor              map[string]error
+	existingKeys           map[string]bool
+	startMultipartInput    storage.StartMultipartUploadInput
+	startMultipartErr      error
+	uploadPartInputs       []storage.UploadPartInput
+	uploadPartErr          error
+	completeMultipartInput storage.CompleteMultipartUploadInput
+	completeMultipartErr   error
+	abortMultipartInput    storage.AbortMultipartUploadInput
+	abortMultipartErr      error
+	listObjectKeys         []string
+	listObjectKeysErr      error
+	copyInputs             []storage.CopyObjectInput
+	copyErr                error
+	deleteInputs           []storage.DeleteObjectInput
+	deleteErr              error
 }
 
 func (s *stubStorageClient) ListPath(context.Context, storage.ListPathInput) (storage.ListPathResult, error) {
@@ -83,6 +91,27 @@ func (s *stubStorageClient) AbortMultipartUpload(_ context.Context, input storag
 	return s.abortMultipartErr
 }
 
+func (s *stubStorageClient) ObjectExists(_ context.Context, input storage.ObjectExistsInput) (bool, error) {
+	if s.existingKeys == nil {
+		return false, nil
+	}
+	return s.existingKeys[input.Key], nil
+}
+
+func (s *stubStorageClient) ListObjectKeys(_ context.Context, _ storage.ListObjectKeysInput) ([]string, error) {
+	return s.listObjectKeys, s.listObjectKeysErr
+}
+
+func (s *stubStorageClient) CopyObject(_ context.Context, input storage.CopyObjectInput) error {
+	s.copyInputs = append(s.copyInputs, input)
+	return s.copyErr
+}
+
+func (s *stubStorageClient) DeleteObject(_ context.Context, input storage.DeleteObjectInput) error {
+	s.deleteInputs = append(s.deleteInputs, input)
+	return s.deleteErr
+}
+
 func TestValidateDestinationPath(t *testing.T) {
 	t.Parallel()
 
@@ -138,6 +167,7 @@ func TestUploadPassesContentTypeAndMetadata(t *testing.T) {
 		"application/pdf",
 		bytes.NewBufferString("payload"),
 		int64(len("payload")),
+		dto.DuplicateConflictPolicyReject,
 	)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -175,7 +205,7 @@ func TestUploadPassesContentTypeAndMetadata(t *testing.T) {
 func TestUploadRejectsDuplicate(t *testing.T) {
 	t.Parallel()
 
-	service := NewService(&stubStorageClient{putErr: storage.ErrObjectAlreadyExists})
+	service := NewService(&stubStorageClient{existingKeys: map[string]bool{"docs/report.pdf": true}})
 
 	_, err := service.Upload(
 		context.Background(),
@@ -185,6 +215,7 @@ func TestUploadRejectsDuplicate(t *testing.T) {
 		"application/pdf",
 		bytes.NewBufferString("payload"),
 		int64(len("payload")),
+		dto.DuplicateConflictPolicyReject,
 	)
 	if err == nil {
 		t.Fatalf("expected duplicate error, got nil")
@@ -208,6 +239,7 @@ func TestUploadRejectsInvalidDestinationPath(t *testing.T) {
 		"application/pdf",
 		bytes.NewBufferString("payload"),
 		int64(len("payload")),
+		dto.DuplicateConflictPolicyReject,
 	)
 	if err == nil {
 		t.Fatalf("expected invalid path error, got nil")
@@ -228,9 +260,113 @@ func TestUploadPropagatesStorageErrors(t *testing.T) {
 		"application/pdf",
 		bytes.NewBufferString("payload"),
 		int64(len("payload")),
+		dto.DuplicateConflictPolicyReject,
 	)
 	if !errors.Is(err, expectedErr) {
 		t.Fatalf("expected storage error to propagate, got %v", err)
+	}
+}
+
+func TestPreviewDuplicatesReturnsImpactedPathsAndRenameTargets(t *testing.T) {
+	t.Parallel()
+
+	service := NewService(&stubStorageClient{
+		existingKeys: map[string]bool{
+			"docs/report.pdf":     true,
+			"docs/report_(1).pdf": true,
+		},
+	})
+
+	response, err := service.PreviewDuplicates(
+		context.Background(),
+		"user-123",
+		"docs",
+		"",
+		[]string{"report.pdf", "notes.txt"},
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !response.HasConflicts {
+		t.Fatalf("expected conflicts to be reported")
+	}
+	if len(response.ImpactedPaths) != 1 || response.ImpactedPaths[0] != "docs/report.pdf" {
+		t.Fatalf("unexpected impacted paths: %+v", response.ImpactedPaths)
+	}
+	if response.Items[0].RenamePath != "docs/report_(2).pdf" {
+		t.Fatalf("expected next rename path, got %+v", response.Items[0])
+	}
+	if response.Items[1].Conflict {
+		t.Fatalf("expected non-conflicting item to remain available")
+	}
+}
+
+func TestUploadRenameResolvesDuplicateWithSuffix(t *testing.T) {
+	t.Parallel()
+
+	storageClient := &stubStorageClient{
+		existingKeys: map[string]bool{
+			"docs/report.pdf":     true,
+			"docs/report_(1).pdf": true,
+		},
+	}
+	service := NewService(storageClient)
+
+	result, err := service.Upload(
+		context.Background(),
+		"user-123",
+		"docs",
+		"report.pdf",
+		"application/pdf",
+		bytes.NewBufferString("payload"),
+		int64(len("payload")),
+		dto.DuplicateConflictPolicyRename,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.Path != "docs/report_(2).pdf" {
+		t.Fatalf("expected renamed path, got %q", result.Path)
+	}
+	if storageClient.putInputs[0].Key != "docs/report_(2).pdf" {
+		t.Fatalf("expected renamed upload key, got %q", storageClient.putInputs[0].Key)
+	}
+}
+
+func TestUploadReplaceMovesExistingObjectToTrash(t *testing.T) {
+	t.Parallel()
+
+	storageClient := &stubStorageClient{
+		existingKeys: map[string]bool{
+			"docs/report.pdf": true,
+		},
+	}
+	service := NewService(storageClient)
+
+	result, err := service.Upload(
+		context.Background(),
+		"user-123",
+		"docs",
+		"report.pdf",
+		"application/pdf",
+		bytes.NewBufferString("payload"),
+		int64(len("payload")),
+		dto.DuplicateConflictPolicyReplace,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.Path != "docs/report.pdf" {
+		t.Fatalf("expected replace to keep original key, got %q", result.Path)
+	}
+	if len(storageClient.copyInputs) != 1 || storageClient.copyInputs[0].DestinationKey != "trash/docs/report.pdf" {
+		t.Fatalf("expected trash copy before write, got %+v", storageClient.copyInputs)
+	}
+	if len(storageClient.deleteInputs) != 1 || storageClient.deleteInputs[0].Key != "docs/report.pdf" {
+		t.Fatalf("expected source delete after trash copy, got %+v", storageClient.deleteInputs)
 	}
 }
 
@@ -329,6 +465,7 @@ func TestUploadFolderRejectsMismatchedArrays(t *testing.T) {
 		"docs",
 		files,
 		relativePaths,
+		dto.DuplicateConflictPolicyReject,
 	)
 
 	// Should fail on the second file (index 1) due to missing relative path
@@ -364,6 +501,7 @@ func TestUploadFolderRejectsZeroByte(t *testing.T) {
 		"",
 		files,
 		relativePaths,
+		dto.DuplicateConflictPolicyReject,
 	)
 
 	if err == nil {
@@ -398,6 +536,7 @@ func TestUploadFolderRejectsTraversal(t *testing.T) {
 		"docs",
 		files,
 		[]string{"../report.pdf"},
+		dto.DuplicateConflictPolicyReject,
 	)
 
 	if err == nil {
@@ -431,6 +570,7 @@ func TestUploadFolderRejectsDuplicateTargetKeyInBatch(t *testing.T) {
 		"docs",
 		files,
 		[]string{"reports//q1/file.pdf", "reports/q1/file.pdf"},
+		dto.DuplicateConflictPolicyReject,
 	)
 
 	if err == nil {
@@ -451,8 +591,8 @@ func TestUploadFolderReturnsConflictWhenTargetExists(t *testing.T) {
 	t.Parallel()
 
 	storageClient := &stubStorageClient{
-		putErrFor: map[string]error{
-			"docs/reports/file.pdf": storage.ErrObjectAlreadyExists,
+		existingKeys: map[string]bool{
+			"docs/reports/file.pdf": true,
 		},
 	}
 	service := NewService(storageClient)
@@ -467,6 +607,7 @@ func TestUploadFolderReturnsConflictWhenTargetExists(t *testing.T) {
 		"docs",
 		files,
 		[]string{"reports/file.pdf"},
+		dto.DuplicateConflictPolicyReject,
 	)
 
 	if err == nil {
@@ -497,6 +638,7 @@ func TestUploadFolderUploadsInDeterministicOrderAndPreservesMetadata(t *testing.
 		"docs",
 		files,
 		[]string{"z-dir/b.txt", "a-dir/a.txt"},
+		dto.DuplicateConflictPolicyReject,
 	)
 
 	if err != nil {
@@ -539,6 +681,38 @@ func TestUploadFolderUploadsInDeterministicOrderAndPreservesMetadata(t *testing.
 	}
 }
 
+func TestUploadFolderRenameResolvesConflicts(t *testing.T) {
+	t.Parallel()
+
+	storageClient := &stubStorageClient{
+		existingKeys: map[string]bool{
+			"docs/reports/file.pdf":     true,
+			"docs/reports/file_(1).pdf": true,
+		},
+	}
+	service := NewService(storageClient)
+
+	files := []*multipart.FileHeader{
+		mustCreateFileHeader(t, "files", "file.pdf", "application/pdf", "payload"),
+	}
+
+	results, err := service.UploadFolder(
+		context.Background(),
+		"user-123",
+		"docs",
+		files,
+		[]string{"reports/file.pdf"},
+		dto.DuplicateConflictPolicyRename,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if results[0].Path != "docs/reports/file_(2).pdf" {
+		t.Fatalf("expected renamed folder upload path, got %+v", results[0])
+	}
+}
+
 func TestInitiateMultipartUploadPassesMetadata(t *testing.T) {
 	t.Parallel()
 
@@ -551,6 +725,7 @@ func TestInitiateMultipartUploadPassesMetadata(t *testing.T) {
 		"videos",
 		" clip .mp4 ",
 		"video/mp4",
+		dto.DuplicateConflictPolicyReject,
 	)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -567,6 +742,33 @@ func TestInitiateMultipartUploadPassesMetadata(t *testing.T) {
 	}
 	if storageClient.startMultipartInput.Metadata["stored-filename"] != "clip .mp4" {
 		t.Fatalf("expected stored filename metadata")
+	}
+}
+
+func TestInitiateMultipartUploadRenameResolvesConflicts(t *testing.T) {
+	t.Parallel()
+
+	storageClient := &stubStorageClient{
+		existingKeys: map[string]bool{
+			"videos/clip.mp4": true,
+		},
+	}
+	service := NewService(storageClient)
+
+	session, err := service.InitiateMultipartUpload(
+		context.Background(),
+		"user-123",
+		"videos",
+		"clip.mp4",
+		"video/mp4",
+		dto.DuplicateConflictPolicyRename,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if session.Key != "videos/clip_(1).mp4" {
+		t.Fatalf("expected renamed multipart key, got %q", session.Key)
 	}
 }
 

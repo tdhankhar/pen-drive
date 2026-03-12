@@ -228,6 +228,63 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/files/duplicates/preview": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Preview impacted files and rename targets before uploading a file or folder",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "files"
+                ],
+                "summary": "Preview duplicate conflicts",
+                "parameters": [
+                    {
+                        "description": "Duplicate preview payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.DuplicatePreviewRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.DuplicatePreviewResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/files/upload": {
             "post": {
                 "security": [
@@ -264,6 +321,12 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Override filename",
                         "name": "filename",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Duplicate conflict policy: reject, rename, replace",
+                        "name": "conflict_policy",
                         "in": "formData"
                     }
                 ],
@@ -338,6 +401,12 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Destination folder path within bucket",
                         "name": "path",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Duplicate conflict policy: reject, rename, replace",
+                        "name": "conflict_policy",
                         "in": "formData"
                     }
                 ],
@@ -695,6 +764,86 @@ const docTemplate = `{
                 }
             }
         },
+        "github_com_abhishek_pen-drive_backend_internal_api_dto.DuplicateConflictPolicy": {
+            "type": "string",
+            "enum": [
+                "reject",
+                "rename",
+                "replace"
+            ],
+            "x-enum-varnames": [
+                "DuplicateConflictPolicyReject",
+                "DuplicateConflictPolicyRename",
+                "DuplicateConflictPolicyReplace"
+            ]
+        },
+        "github_com_abhishek_pen-drive_backend_internal_api_dto.DuplicatePreviewItem": {
+            "type": "object",
+            "properties": {
+                "conflict": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "existing_path": {
+                    "type": "string",
+                    "example": "uploads/docs/report.pdf"
+                },
+                "rename_path": {
+                    "type": "string",
+                    "example": "uploads/docs/report_(1).pdf"
+                },
+                "requested_path": {
+                    "type": "string",
+                    "example": "uploads/docs/report.pdf"
+                }
+            }
+        },
+        "github_com_abhishek_pen-drive_backend_internal_api_dto.DuplicatePreviewRequest": {
+            "type": "object",
+            "properties": {
+                "filename": {
+                    "type": "string",
+                    "example": "report.pdf"
+                },
+                "path": {
+                    "type": "string",
+                    "example": "uploads/docs"
+                },
+                "relative_paths": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "reports/q1/report.pdf"
+                    ]
+                }
+            }
+        },
+        "github_com_abhishek_pen-drive_backend_internal_api_dto.DuplicatePreviewResponse": {
+            "type": "object",
+            "properties": {
+                "has_conflicts": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "impacted_paths": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "uploads/docs/report.pdf"
+                    ]
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.DuplicatePreviewItem"
+                    }
+                }
+            }
+        },
         "github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorPayload": {
             "type": "object",
             "properties": {
@@ -831,6 +980,14 @@ const docTemplate = `{
         "github_com_abhishek_pen-drive_backend_internal_api_dto.MultipartUploadInitiateRequest": {
             "type": "object",
             "properties": {
+                "conflict_policy": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.DuplicateConflictPolicy"
+                        }
+                    ],
+                    "example": "reject"
+                },
                 "content_type": {
                     "type": "string",
                     "example": "video/mp4"

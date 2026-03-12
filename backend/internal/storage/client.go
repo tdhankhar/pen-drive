@@ -108,6 +108,27 @@ type AbortMultipartUploadInput struct {
 	UploadID string
 }
 
+type ObjectExistsInput struct {
+	Bucket string
+	Key    string
+}
+
+type ListObjectKeysInput struct {
+	Bucket string
+	Prefix string
+}
+
+type CopyObjectInput struct {
+	Bucket         string
+	SourceKey      string
+	DestinationKey string
+}
+
+type DeleteObjectInput struct {
+	Bucket string
+	Key    string
+}
+
 type ObjectMetadata struct {
 	OriginalFilename string
 	StoredFilename   string
@@ -374,6 +395,86 @@ func (c *Client) AbortMultipartUpload(ctx context.Context, input AbortMultipartU
 	})
 	if err != nil {
 		return fmt.Errorf("abort multipart upload %q in bucket %q: %w", input.Key, input.Bucket, err)
+	}
+
+	return nil
+}
+
+func (c *Client) ObjectExists(ctx context.Context, input ObjectExistsInput) (bool, error) {
+	_, err := c.s3.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: &input.Bucket,
+		Key:    &input.Key,
+	})
+	if err == nil {
+		return true, nil
+	}
+
+	var responseErr *awshttp.ResponseError
+	if errors.As(err, &responseErr) && responseErr.HTTPStatusCode() == 404 {
+		return false, nil
+	}
+
+	return false, fmt.Errorf("check object existence for %q in bucket %q: %w", input.Key, input.Bucket, err)
+}
+
+func (c *Client) ListObjectKeys(ctx context.Context, input ListObjectKeysInput) ([]string, error) {
+	keys := make([]string, 0)
+	var continuationToken *string
+
+	for {
+		response, err := c.s3.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
+			Bucket:            &input.Bucket,
+			Prefix:            emptyToNil(input.Prefix),
+			ContinuationToken: continuationToken,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("list object keys for prefix %q in bucket %q: %w", input.Prefix, input.Bucket, err)
+		}
+
+		for _, object := range response.Contents {
+			key := aws.ToString(object.Key)
+			if key == "" {
+				continue
+			}
+			keys = append(keys, key)
+		}
+
+		if response.IsTruncated == nil || !*response.IsTruncated {
+			break
+		}
+		continuationToken = response.NextContinuationToken
+	}
+
+	return keys, nil
+}
+
+func (c *Client) CopyObject(ctx context.Context, input CopyObjectInput) error {
+	source := path.Join(input.Bucket, input.SourceKey)
+	_, err := c.s3.CopyObject(ctx, &s3.CopyObjectInput{
+		Bucket:     &input.Bucket,
+		Key:        &input.DestinationKey,
+		CopySource: aws.String(source),
+	})
+	if err != nil {
+		return fmt.Errorf(
+			"copy object %q to %q in bucket %q: %w",
+			input.SourceKey,
+			input.DestinationKey,
+			input.Bucket,
+			err,
+		)
+	}
+
+	return nil
+}
+
+func (c *Client) DeleteObject(ctx context.Context, input DeleteObjectInput) error {
+	_, err := c.s3.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: &input.Bucket,
+		Key:    &input.Key,
+	})
+	if err != nil {
+		return fmt.Errorf("delete object %q in bucket %q: %w", input.Key, input.Bucket, err)
 	}
 
 	return nil

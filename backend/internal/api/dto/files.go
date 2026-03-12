@@ -34,6 +34,33 @@ type UploadedFileInfo struct {
 	UploadedAt string `json:"uploaded_at" example:"2026-03-12T16:00:00Z"`
 }
 
+type DuplicateConflictPolicy string
+
+const (
+	DuplicateConflictPolicyReject  DuplicateConflictPolicy = "reject"
+	DuplicateConflictPolicyRename  DuplicateConflictPolicy = "rename"
+	DuplicateConflictPolicyReplace DuplicateConflictPolicy = "replace"
+)
+
+type DuplicatePreviewRequest struct {
+	Path          string   `json:"path,omitempty" example:"uploads/docs"`
+	Filename      string   `json:"filename,omitempty" example:"report.pdf"`
+	RelativePaths []string `json:"relative_paths,omitempty" example:"reports/q1/report.pdf"`
+}
+
+type DuplicatePreviewItem struct {
+	RequestedPath string `json:"requested_path" example:"uploads/docs/report.pdf"`
+	Conflict      bool   `json:"conflict" example:"true"`
+	ExistingPath  string `json:"existing_path,omitempty" example:"uploads/docs/report.pdf"`
+	RenamePath    string `json:"rename_path,omitempty" example:"uploads/docs/report_(1).pdf"`
+}
+
+type DuplicatePreviewResponse struct {
+	HasConflicts  bool                   `json:"has_conflicts" example:"true"`
+	ImpactedPaths []string               `json:"impacted_paths,omitempty" example:"uploads/docs/report.pdf"`
+	Items         []DuplicatePreviewItem `json:"items"`
+}
+
 // FileUploadResponse is the response for a successful file upload
 type FileUploadResponse struct {
 	File UploadedFileInfo `json:"file"`
@@ -56,10 +83,11 @@ type FolderUploadResponse struct {
 }
 
 type MultipartUploadInitiateRequest struct {
-	Filename    string `json:"filename" example:"video.mp4"`
-	Path        string `json:"path,omitempty" example:"uploads/videos"`
-	ContentType string `json:"content_type,omitempty" example:"video/mp4"`
-	Size        int64  `json:"size" example:"7340032"`
+	Filename       string                  `json:"filename" example:"video.mp4"`
+	Path           string                  `json:"path,omitempty" example:"uploads/videos"`
+	ContentType    string                  `json:"content_type,omitempty" example:"video/mp4"`
+	Size           int64                   `json:"size" example:"7340032"`
+	ConflictPolicy DuplicateConflictPolicy `json:"conflict_policy,omitempty" example:"reject"`
 }
 
 type MultipartUploadInitiateResponse struct {

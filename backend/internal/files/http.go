@@ -60,6 +60,47 @@ func (h *Handler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// PreviewDuplicates godoc
+// @Summary Preview duplicate conflicts
+// @Description Preview impacted files and rename targets before uploading a file or folder
+// @Tags files
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param payload body dto.DuplicatePreviewRequest true "Duplicate preview payload"
+// @Success 200 {object} dto.DuplicatePreviewResponse
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 401 {object} dto.ErrorResponse
+// @Failure 500 {object} dto.ErrorResponse
+// @Router /api/v1/files/duplicates/preview [post]
+func (h *Handler) PreviewDuplicates(c *gin.Context) {
+	userID, _ := c.Get("auth.user_id")
+
+	var request dto.DuplicatePreviewRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		respondError(c, http.StatusBadRequest, "invalid_input", "request body is invalid")
+		return
+	}
+
+	response, err := h.service.PreviewDuplicates(
+		c.Request.Context(),
+		userID.(string),
+		request.Path,
+		request.Filename,
+		request.RelativePaths,
+	)
+	if err != nil {
+		if errors.Is(err, ErrInvalidUploadInput) || errors.Is(err, ErrDuplicateBatchKey) {
+			respondError(c, http.StatusBadRequest, "invalid_input", err.Error())
+			return
+		}
+		respondError(c, http.StatusInternalServerError, "preview_failed", err.Error())
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
 // Upload godoc
 // @Summary Upload file
 // @Description Upload a single file to a destination path in the user's bucket
@@ -70,6 +111,7 @@ func (h *Handler) List(c *gin.Context) {
 // @Param file formData file true "File to upload"
 // @Param path formData string false "Destination path within bucket"
 // @Param filename formData string false "Override filename"
+// @Param conflict_policy formData string false "Duplicate conflict policy: reject, rename, replace"
 // @Success 201 {object} dto.FileUploadResponse
 // @Failure 400 {object} dto.ErrorResponse
 // @Failure 401 {object} dto.ErrorResponse
@@ -110,6 +152,12 @@ func (h *Handler) Upload(c *gin.Context) {
 		filename = file.Filename
 	}
 
+	conflictPolicy, err := parseConflictPolicy(c.PostForm("conflict_policy"))
+	if err != nil {
+		respondError(c, http.StatusBadRequest, "invalid_input", err.Error())
+		return
+	}
+
 	// Call service layer
 	result, err := h.service.Upload(
 		c.Request.Context(),
@@ -119,6 +167,7 @@ func (h *Handler) Upload(c *gin.Context) {
 		file.Header.Get("Content-Type"),
 		src,
 		file.Size,
+		conflictPolicy,
 	)
 	if err != nil {
 		// Handle specific errors
@@ -159,6 +208,7 @@ func (h *Handler) Upload(c *gin.Context) {
 // @Param files formData file true "Files to upload (repeated)"
 // @Param relative_paths formData string true "Relative path for each file (repeated, must match files count)"
 // @Param path formData string false "Destination folder path within bucket"
+// @Param conflict_policy formData string false "Duplicate conflict policy: reject, rename, replace"
 // @Success 201 {object} dto.FolderUploadResponse
 // @Failure 400 {object} dto.ErrorResponse
 // @Failure 401 {object} dto.ErrorResponse
@@ -197,6 +247,11 @@ func (h *Handler) UploadFolder(c *gin.Context) {
 
 	// Get destination path
 	destinationPath := c.PostForm("path")
+	conflictPolicy, err := parseConflictPolicy(c.PostForm("conflict_policy"))
+	if err != nil {
+		respondError(c, http.StatusBadRequest, "invalid_input", err.Error())
+		return
+	}
 
 	// Call service layer
 	results, err := h.service.UploadFolder(
@@ -205,6 +260,7 @@ func (h *Handler) UploadFolder(c *gin.Context) {
 		destinationPath,
 		files,
 		relativePaths,
+		conflictPolicy,
 	)
 	if err != nil {
 		if errors.Is(err, storage.ErrObjectAlreadyExists) {
@@ -264,6 +320,7 @@ func (h *Handler) InitiateMultipartUpload(c *gin.Context) {
 		request.Path,
 		request.Filename,
 		request.ContentType,
+		request.ConflictPolicy,
 	)
 	if err != nil {
 		if errors.Is(err, storage.ErrObjectAlreadyExists) {

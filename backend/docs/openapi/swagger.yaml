@@ -25,6 +25,62 @@ definitions:
         example: Password123!
         type: string
     type: object
+  github_com_abhishek_pen-drive_backend_internal_api_dto.DuplicateConflictPolicy:
+    enum:
+    - reject
+    - rename
+    - replace
+    type: string
+    x-enum-varnames:
+    - DuplicateConflictPolicyReject
+    - DuplicateConflictPolicyRename
+    - DuplicateConflictPolicyReplace
+  github_com_abhishek_pen-drive_backend_internal_api_dto.DuplicatePreviewItem:
+    properties:
+      conflict:
+        example: true
+        type: boolean
+      existing_path:
+        example: uploads/docs/report.pdf
+        type: string
+      rename_path:
+        example: uploads/docs/report_(1).pdf
+        type: string
+      requested_path:
+        example: uploads/docs/report.pdf
+        type: string
+    type: object
+  github_com_abhishek_pen-drive_backend_internal_api_dto.DuplicatePreviewRequest:
+    properties:
+      filename:
+        example: report.pdf
+        type: string
+      path:
+        example: uploads/docs
+        type: string
+      relative_paths:
+        example:
+        - reports/q1/report.pdf
+        items:
+          type: string
+        type: array
+    type: object
+  github_com_abhishek_pen-drive_backend_internal_api_dto.DuplicatePreviewResponse:
+    properties:
+      has_conflicts:
+        example: true
+        type: boolean
+      impacted_paths:
+        example:
+        - uploads/docs/report.pdf
+        items:
+          type: string
+        type: array
+      items:
+        items:
+          $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.DuplicatePreviewItem'
+        type: array
+    type: object
   github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorPayload:
     properties:
       code:
@@ -118,6 +174,10 @@ definitions:
     type: object
   github_com_abhishek_pen-drive_backend_internal_api_dto.MultipartUploadInitiateRequest:
     properties:
+      conflict_policy:
+        allOf:
+        - $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.DuplicateConflictPolicy'
+        example: reject
       content_type:
         example: video/mp4
         type: string
@@ -335,6 +395,43 @@ paths:
       summary: List files
       tags:
       - files
+  /api/v1/files/duplicates/preview:
+    post:
+      consumes:
+      - application/json
+      description: Preview impacted files and rename targets before uploading a file
+        or folder
+      parameters:
+      - description: Duplicate preview payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.DuplicatePreviewRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.DuplicatePreviewResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Preview duplicate conflicts
+      tags:
+      - files
   /api/v1/files/upload:
     post:
       consumes:
@@ -353,6 +450,10 @@ paths:
       - description: Override filename
         in: formData
         name: filename
+        type: string
+      - description: 'Duplicate conflict policy: reject, rename, replace'
+        in: formData
+        name: conflict_policy
         type: string
       produces:
       - application/json
@@ -402,6 +503,10 @@ paths:
       - description: Destination folder path within bucket
         in: formData
         name: path
+        type: string
+      - description: 'Duplicate conflict policy: reject, rename, replace'
+        in: formData
+        name: conflict_policy
         type: string
       produces:
       - application/json
