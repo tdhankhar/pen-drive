@@ -45,7 +45,7 @@ func main() {
 		return
 	}
 
-	router := apphttp.NewRouter(logger, dbConn, storageClient)
+	router := apphttp.NewRouter(logger, dbConn, storageClient, cfg.JWT)
 
 	server := &http.Server{
 		Addr:              cfg.HTTP.Address(),

@@ -11,7 +11,7 @@ type errorPayload struct {
 	Message string `json:"message"`
 }
 
-func respondError(c *gin.Context, status int, code, message string) {
+func RespondError(c *gin.Context, status int, code, message string) {
 	c.JSON(status, errorResponse{
 		Error: errorPayload{
 			Code:    code,

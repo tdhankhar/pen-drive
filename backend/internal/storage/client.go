@@ -2,9 +2,11 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
@@ -39,6 +41,32 @@ func (c *Client) Ping(ctx context.Context) error {
 	})
 	if err != nil {
 		return fmt.Errorf("head bucket %q: %w", c.pingBucket, err)
+	}
+
+	return nil
+}
+
+func (c *Client) CreateBucket(ctx context.Context, bucket string) error {
+	_, err := c.s3.CreateBucket(ctx, &s3.CreateBucketInput{
+		Bucket: &bucket,
+	})
+	if err != nil {
+		var responseErr *awshttp.ResponseError
+		if errors.As(err, &responseErr) && responseErr.HTTPStatusCode() == 409 {
+			return nil
+		}
+		return fmt.Errorf("create bucket %q: %w", bucket, err)
+	}
+
+	return nil
+}
+
+func (c *Client) DeleteBucket(ctx context.Context, bucket string) error {
+	_, err := c.s3.DeleteBucket(ctx, &s3.DeleteBucketInput{
+		Bucket: &bucket,
+	})
+	if err != nil {
+		return fmt.Errorf("delete bucket %q: %w", bucket, err)
 	}
 
 	return nil

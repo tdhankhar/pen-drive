@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -15,6 +16,7 @@ type Config struct {
 	Logging  LoggingConfig
 	Database DatabaseConfig
 	S3       S3Config
+	JWT      JWTConfig
 }
 
 type HTTPConfig struct {
@@ -37,6 +39,14 @@ type S3Config struct {
 	SecretAccess string
 	PingBucket   string
 	UsePathStyle bool
+}
+
+type JWTConfig struct {
+	Issuer          string
+	Audience        string
+	Secret          string
+	AccessTokenTTL  string
+	RefreshTokenTTL string
 }
 
 func (h HTTPConfig) Address() string {
@@ -69,6 +79,13 @@ func Load() (Config, error) {
 			SecretAccess: envOrDefault("S3_SECRET_ACCESS_KEY", envOrDefault("R2_SECRET_ACCESS_KEY", "")),
 			PingBucket:   envOrDefault("S3_PING_BUCKET", envOrDefault("R2_DATA_BUCKET", "")),
 			UsePathStyle: boolEnvOrDefault("S3_USE_PATH_STYLE", false),
+		},
+		JWT: JWTConfig{
+			Issuer:          envOrDefault("JWT_ISSUER", "pen-drive-local"),
+			Audience:        envOrDefault("JWT_AUDIENCE", "pen-drive-api"),
+			Secret:          envOrDefault("JWT_SECRET", ""),
+			AccessTokenTTL:  envOrDefault("ACCESS_TOKEN_TTL", "15m"),
+			RefreshTokenTTL: envOrDefault("REFRESH_TOKEN_TTL", "720h"),
 		},
 	}
 
@@ -106,6 +123,26 @@ func Load() (Config, error) {
 
 	if cfg.S3.PingBucket == "" {
 		return Config{}, fmt.Errorf("S3_PING_BUCKET or R2_DATA_BUCKET is required")
+	}
+
+	if cfg.JWT.Issuer == "" {
+		return Config{}, fmt.Errorf("JWT_ISSUER is required")
+	}
+
+	if cfg.JWT.Audience == "" {
+		return Config{}, fmt.Errorf("JWT_AUDIENCE is required")
+	}
+
+	if cfg.JWT.Secret == "" {
+		return Config{}, fmt.Errorf("JWT_SECRET is required")
+	}
+
+	if _, err := cfg.JWT.AccessTTL(); err != nil {
+		return Config{}, fmt.Errorf("ACCESS_TOKEN_TTL: %w", err)
+	}
+
+	if _, err := cfg.JWT.RefreshTTL(); err != nil {
+		return Config{}, fmt.Errorf("REFRESH_TOKEN_TTL: %w", err)
 	}
 
 	return cfg, nil
@@ -148,4 +185,12 @@ func resolveS3Endpoint() string {
 	}
 
 	return ""
+}
+
+func (j JWTConfig) AccessTTL() (time.Duration, error) {
+	return time.ParseDuration(j.AccessTokenTTL)
+}
+
+func (j JWTConfig) RefreshTTL() (time.Duration, error) {
+	return time.ParseDuration(j.RefreshTokenTTL)
 }

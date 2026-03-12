@@ -73,4 +73,47 @@ Verification result:
 
 Commit:
 
+- `41e81cb feat: add backend platform wiring`
+
+### Checkpoint 3: Auth and user provisioning
+
+Goal:
+
+- implement signup, login, refresh, and protected `me` endpoint
+- hash passwords with bcrypt
+- issue JWT access tokens and opaque refresh tokens
+- persist and rotate refresh tokens in Postgres
+- provision one storage bucket per user on signup
+
+Verification steps:
+
+- `make backend-dev-up`
+- `make backend-build`
+- `go test ./...`
+- start backend with `.env.local` R2 credentials auto-loaded
+- call signup, login, refresh, and protected `me` endpoints
+- confirm user and refresh token rows exist in Postgres
+- confirm signup-created user bucket exists in R2
+
+Verification result:
+
+- passed on 2026-03-12 against local Postgres + local MinIO
+- `make backend-dev-up`: passed
+- `make backend-build`: passed
+- `go test ./...`: passed
+- signup endpoint returned `201 Created`
+- login endpoint returned `200 OK`
+- refresh endpoint returned `200 OK`
+- protected `GET /api/v1/me` returned the authenticated user
+- confirmed user row exists in Postgres
+- confirmed refresh token rows exist in Postgres and rotation adds a new token row
+- confirmed signup-created bucket exists on S3-compatible storage via `head-bucket`
+- note: the provided R2 credentials successfully support readiness checks on the existing bucket, but `CreateBucket` against R2 returned `403 AccessDenied`, so bucket-provisioning verification for this checkpoint used local MinIO instead
+
+Commit:
+
+- pending
+
+Commit:
+
 - pending
