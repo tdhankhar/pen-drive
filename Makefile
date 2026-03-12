@@ -1,6 +1,6 @@
 APP_NAME=pen-drive
 
-.PHONY: backend-run backend-build backend-test backend-lint backend-tidy backend-dev-up backend-dev-down backend-openapi
+.PHONY: backend-run backend-build backend-test backend-lint backend-tidy backend-dev-up backend-dev-down backend-openapi frontend-build frontend-lint
 
 backend-run:
 	cd backend && go run ./cmd/api
@@ -26,3 +26,9 @@ backend-dev-up:
 
 backend-dev-down:
 	docker-compose down
+
+frontend-build:
+	cd frontend && npm run build
+
+frontend-lint:
+	cd frontend && npm run lint
