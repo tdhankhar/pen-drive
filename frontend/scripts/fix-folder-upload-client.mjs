@@ -18,56 +18,30 @@ export type PostApiV1FilesUploadFolderBody = {
   relative_paths: string[];
   /** Destination folder path within bucket */
   path?: string;
+  /** Duplicate conflict policy: reject, rename, replace */
+  conflict_policy?: string;
 };
-`;
-
-const clientSearch = `export const postApiV1FilesUploadFolder = async (postApiV1FilesUploadFolderBody: PostApiV1FilesUploadFolderBody, options?: RequestInit): Promise<postApiV1FilesUploadFolderResponse> => {
-    const formData = new FormData();
-formData.append(\`files\`, postApiV1FilesUploadFolderBody.files);
-formData.append(\`relative_paths\`, postApiV1FilesUploadFolderBody.relative_paths);
-if(postApiV1FilesUploadFolderBody.path !== undefined) {
- formData.append(\`path\`, postApiV1FilesUploadFolderBody.path);
- }
-
-  return customFetch<postApiV1FilesUploadFolderResponse>(getPostApiV1FilesUploadFolderUrl(),
-  {      
-    ...options,
-    method: 'POST'
-    ,
-    body: 
-      formData,
-  }
-);}
-`;
-
-const clientReplacement = `export const postApiV1FilesUploadFolder = async (postApiV1FilesUploadFolderBody: PostApiV1FilesUploadFolderBody, options?: RequestInit): Promise<postApiV1FilesUploadFolderResponse> => {
-    const formData = new FormData();
-postApiV1FilesUploadFolderBody.files.forEach((file) => {
- formData.append(\`files\`, file);
-});
-postApiV1FilesUploadFolderBody.relative_paths.forEach((relativePath) => {
- formData.append(\`relative_paths\`, relativePath);
-});
-if(postApiV1FilesUploadFolderBody.path !== undefined) {
- formData.append(\`path\`, postApiV1FilesUploadFolderBody.path);
- }
-
-  return customFetch<postApiV1FilesUploadFolderResponse>(getPostApiV1FilesUploadFolderUrl(),
-  {      
-    ...options,
-    method: 'POST'
-    ,
-    body: 
-      formData,
-  }
-);}
 `;
 
 await writeFile(modelPath, modelSource);
 
 const clientContent = await readFile(clientPath, "utf8");
-if (!clientContent.includes(clientSearch)) {
+const updatedClientContent = clientContent
+  .replace(
+    "formData.append(`files`, postApiV1FilesUploadFolderBody.files);",
+    `postApiV1FilesUploadFolderBody.files.forEach((file) => {
+ formData.append(\`files\`, file);
+});`,
+  )
+  .replace(
+    "formData.append(`relative_paths`, postApiV1FilesUploadFolderBody.relative_paths);",
+    `postApiV1FilesUploadFolderBody.relative_paths.forEach((relativePath) => {
+ formData.append(\`relative_paths\`, relativePath);
+});`,
+  );
+
+if (updatedClientContent === clientContent) {
   throw new Error("folder upload client block not found");
 }
 
-await writeFile(clientPath, clientContent.replace(clientSearch, clientReplacement));
+await writeFile(clientPath, updatedClientContent);

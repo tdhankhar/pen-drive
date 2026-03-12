@@ -13,4 +13,6 @@ export type PostApiV1FilesUploadBody = {
   path?: string;
   /** Override filename */
   filename?: string;
+  /** Duplicate conflict policy: reject, rename, replace */
+  conflict_policy?: string;
 };

@@ -10,13 +10,21 @@ import type {
   GithubComAbhishekPenDriveBackendInternalApiDtoAuthResponse,
   GithubComAbhishekPenDriveBackendInternalApiDtoAuthenticatedUser,
   GithubComAbhishekPenDriveBackendInternalApiDtoCredentialsRequest,
+  GithubComAbhishekPenDriveBackendInternalApiDtoDuplicatePreviewRequest,
+  GithubComAbhishekPenDriveBackendInternalApiDtoDuplicatePreviewResponse,
   GithubComAbhishekPenDriveBackendInternalApiDtoErrorResponse,
   GithubComAbhishekPenDriveBackendInternalApiDtoFileListResponse,
   GithubComAbhishekPenDriveBackendInternalApiDtoFileUploadResponse,
   GithubComAbhishekPenDriveBackendInternalApiDtoFolderUploadResponse,
+  GithubComAbhishekPenDriveBackendInternalApiDtoMultipartUploadAbortRequest,
+  GithubComAbhishekPenDriveBackendInternalApiDtoMultipartUploadCompleteRequest,
+  GithubComAbhishekPenDriveBackendInternalApiDtoMultipartUploadInitiateRequest,
+  GithubComAbhishekPenDriveBackendInternalApiDtoMultipartUploadInitiateResponse,
+  GithubComAbhishekPenDriveBackendInternalApiDtoMultipartUploadPartResponse,
   GithubComAbhishekPenDriveBackendInternalApiDtoRefreshRequest,
   PostApiV1FilesUploadBody,
-  PostApiV1FilesUploadFolderBody
+  PostApiV1FilesUploadFolderBody,
+  PostApiV1FilesUploadMultipartPartBody
 } from './model';
 
 import { customFetch } from '../http';
@@ -243,6 +251,61 @@ export const getApiV1Files = async (params?: GetApiV1FilesParams, options?: Requ
 
 
 /**
+ * Preview impacted files and rename targets before uploading a file or folder
+ * @summary Preview duplicate conflicts
+ */
+export type postApiV1FilesDuplicatesPreviewResponse200 = {
+  data: GithubComAbhishekPenDriveBackendInternalApiDtoDuplicatePreviewResponse
+  status: 200
+}
+
+export type postApiV1FilesDuplicatesPreviewResponse400 = {
+  data: GithubComAbhishekPenDriveBackendInternalApiDtoErrorResponse
+  status: 400
+}
+
+export type postApiV1FilesDuplicatesPreviewResponse401 = {
+  data: GithubComAbhishekPenDriveBackendInternalApiDtoErrorResponse
+  status: 401
+}
+
+export type postApiV1FilesDuplicatesPreviewResponse500 = {
+  data: GithubComAbhishekPenDriveBackendInternalApiDtoErrorResponse
+  status: 500
+}
+
+export type postApiV1FilesDuplicatesPreviewResponseSuccess = (postApiV1FilesDuplicatesPreviewResponse200) & {
+  headers: Headers;
+};
+export type postApiV1FilesDuplicatesPreviewResponseError = (postApiV1FilesDuplicatesPreviewResponse400 | postApiV1FilesDuplicatesPreviewResponse401 | postApiV1FilesDuplicatesPreviewResponse500) & {
+  headers: Headers;
+};
+
+export type postApiV1FilesDuplicatesPreviewResponse = (postApiV1FilesDuplicatesPreviewResponseSuccess | postApiV1FilesDuplicatesPreviewResponseError)
+
+export const getPostApiV1FilesDuplicatesPreviewUrl = () => {
+
+
+  
+
+  return `/api/v1/files/duplicates/preview`
+}
+
+export const postApiV1FilesDuplicatesPreview = async (githubComAbhishekPenDriveBackendInternalApiDtoDuplicatePreviewRequest: GithubComAbhishekPenDriveBackendInternalApiDtoDuplicatePreviewRequest, options?: RequestInit): Promise<postApiV1FilesDuplicatesPreviewResponse> => {
+  
+  return customFetch<postApiV1FilesDuplicatesPreviewResponse>(getPostApiV1FilesDuplicatesPreviewUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      githubComAbhishekPenDriveBackendInternalApiDtoDuplicatePreviewRequest,)
+  }
+);}
+  
+
+
+/**
  * Upload a single file to a destination path in the user's bucket
  * @summary Upload file
  */
@@ -296,6 +359,9 @@ if(postApiV1FilesUploadBody.path !== undefined) {
  }
 if(postApiV1FilesUploadBody.filename !== undefined) {
  formData.append(`filename`, postApiV1FilesUploadBody.filename);
+ }
+if(postApiV1FilesUploadBody.conflict_policy !== undefined) {
+ formData.append(`conflict_policy`, postApiV1FilesUploadBody.conflict_policy);
  }
 
   return customFetch<postApiV1FilesUploadResponse>(getPostApiV1FilesUploadUrl(),
@@ -367,8 +433,241 @@ postApiV1FilesUploadFolderBody.relative_paths.forEach((relativePath) => {
 if(postApiV1FilesUploadFolderBody.path !== undefined) {
  formData.append(`path`, postApiV1FilesUploadFolderBody.path);
  }
+if(postApiV1FilesUploadFolderBody.conflict_policy !== undefined) {
+ formData.append(`conflict_policy`, postApiV1FilesUploadFolderBody.conflict_policy);
+ }
 
   return customFetch<postApiV1FilesUploadFolderResponse>(getPostApiV1FilesUploadFolderUrl(),
+  {      
+    ...options,
+    method: 'POST'
+    ,
+    body: 
+      formData,
+  }
+);}
+  
+
+
+/**
+ * Abort an in-flight multipart upload and clean up uploaded parts
+ * @summary Abort multipart upload
+ */
+export type postApiV1FilesUploadMultipartAbortResponse204 = {
+  data: void
+  status: 204
+}
+
+export type postApiV1FilesUploadMultipartAbortResponse400 = {
+  data: GithubComAbhishekPenDriveBackendInternalApiDtoErrorResponse
+  status: 400
+}
+
+export type postApiV1FilesUploadMultipartAbortResponse401 = {
+  data: GithubComAbhishekPenDriveBackendInternalApiDtoErrorResponse
+  status: 401
+}
+
+export type postApiV1FilesUploadMultipartAbortResponse500 = {
+  data: GithubComAbhishekPenDriveBackendInternalApiDtoErrorResponse
+  status: 500
+}
+
+export type postApiV1FilesUploadMultipartAbortResponseSuccess = (postApiV1FilesUploadMultipartAbortResponse204) & {
+  headers: Headers;
+};
+export type postApiV1FilesUploadMultipartAbortResponseError = (postApiV1FilesUploadMultipartAbortResponse400 | postApiV1FilesUploadMultipartAbortResponse401 | postApiV1FilesUploadMultipartAbortResponse500) & {
+  headers: Headers;
+};
+
+export type postApiV1FilesUploadMultipartAbortResponse = (postApiV1FilesUploadMultipartAbortResponseSuccess | postApiV1FilesUploadMultipartAbortResponseError)
+
+export const getPostApiV1FilesUploadMultipartAbortUrl = () => {
+
+
+  
+
+  return `/api/v1/files/upload-multipart/abort`
+}
+
+export const postApiV1FilesUploadMultipartAbort = async (githubComAbhishekPenDriveBackendInternalApiDtoMultipartUploadAbortRequest: GithubComAbhishekPenDriveBackendInternalApiDtoMultipartUploadAbortRequest, options?: RequestInit): Promise<postApiV1FilesUploadMultipartAbortResponse> => {
+  
+  return customFetch<postApiV1FilesUploadMultipartAbortResponse>(getPostApiV1FilesUploadMultipartAbortUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      githubComAbhishekPenDriveBackendInternalApiDtoMultipartUploadAbortRequest,)
+  }
+);}
+  
+
+
+/**
+ * Complete an S3 multipart upload after all parts are uploaded
+ * @summary Complete multipart upload
+ */
+export type postApiV1FilesUploadMultipartCompleteResponse201 = {
+  data: GithubComAbhishekPenDriveBackendInternalApiDtoFileUploadResponse
+  status: 201
+}
+
+export type postApiV1FilesUploadMultipartCompleteResponse400 = {
+  data: GithubComAbhishekPenDriveBackendInternalApiDtoErrorResponse
+  status: 400
+}
+
+export type postApiV1FilesUploadMultipartCompleteResponse401 = {
+  data: GithubComAbhishekPenDriveBackendInternalApiDtoErrorResponse
+  status: 401
+}
+
+export type postApiV1FilesUploadMultipartCompleteResponse500 = {
+  data: GithubComAbhishekPenDriveBackendInternalApiDtoErrorResponse
+  status: 500
+}
+
+export type postApiV1FilesUploadMultipartCompleteResponseSuccess = (postApiV1FilesUploadMultipartCompleteResponse201) & {
+  headers: Headers;
+};
+export type postApiV1FilesUploadMultipartCompleteResponseError = (postApiV1FilesUploadMultipartCompleteResponse400 | postApiV1FilesUploadMultipartCompleteResponse401 | postApiV1FilesUploadMultipartCompleteResponse500) & {
+  headers: Headers;
+};
+
+export type postApiV1FilesUploadMultipartCompleteResponse = (postApiV1FilesUploadMultipartCompleteResponseSuccess | postApiV1FilesUploadMultipartCompleteResponseError)
+
+export const getPostApiV1FilesUploadMultipartCompleteUrl = () => {
+
+
+  
+
+  return `/api/v1/files/upload-multipart/complete`
+}
+
+export const postApiV1FilesUploadMultipartComplete = async (githubComAbhishekPenDriveBackendInternalApiDtoMultipartUploadCompleteRequest: GithubComAbhishekPenDriveBackendInternalApiDtoMultipartUploadCompleteRequest, options?: RequestInit): Promise<postApiV1FilesUploadMultipartCompleteResponse> => {
+  
+  return customFetch<postApiV1FilesUploadMultipartCompleteResponse>(getPostApiV1FilesUploadMultipartCompleteUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      githubComAbhishekPenDriveBackendInternalApiDtoMultipartUploadCompleteRequest,)
+  }
+);}
+  
+
+
+/**
+ * Start an S3 multipart upload for a file larger than 5 MB via the backend
+ * @summary Initiate multipart upload
+ */
+export type postApiV1FilesUploadMultipartInitiateResponse201 = {
+  data: GithubComAbhishekPenDriveBackendInternalApiDtoMultipartUploadInitiateResponse
+  status: 201
+}
+
+export type postApiV1FilesUploadMultipartInitiateResponse400 = {
+  data: GithubComAbhishekPenDriveBackendInternalApiDtoErrorResponse
+  status: 400
+}
+
+export type postApiV1FilesUploadMultipartInitiateResponse401 = {
+  data: GithubComAbhishekPenDriveBackendInternalApiDtoErrorResponse
+  status: 401
+}
+
+export type postApiV1FilesUploadMultipartInitiateResponse409 = {
+  data: GithubComAbhishekPenDriveBackendInternalApiDtoErrorResponse
+  status: 409
+}
+
+export type postApiV1FilesUploadMultipartInitiateResponse500 = {
+  data: GithubComAbhishekPenDriveBackendInternalApiDtoErrorResponse
+  status: 500
+}
+
+export type postApiV1FilesUploadMultipartInitiateResponseSuccess = (postApiV1FilesUploadMultipartInitiateResponse201) & {
+  headers: Headers;
+};
+export type postApiV1FilesUploadMultipartInitiateResponseError = (postApiV1FilesUploadMultipartInitiateResponse400 | postApiV1FilesUploadMultipartInitiateResponse401 | postApiV1FilesUploadMultipartInitiateResponse409 | postApiV1FilesUploadMultipartInitiateResponse500) & {
+  headers: Headers;
+};
+
+export type postApiV1FilesUploadMultipartInitiateResponse = (postApiV1FilesUploadMultipartInitiateResponseSuccess | postApiV1FilesUploadMultipartInitiateResponseError)
+
+export const getPostApiV1FilesUploadMultipartInitiateUrl = () => {
+
+
+  
+
+  return `/api/v1/files/upload-multipart/initiate`
+}
+
+export const postApiV1FilesUploadMultipartInitiate = async (githubComAbhishekPenDriveBackendInternalApiDtoMultipartUploadInitiateRequest: GithubComAbhishekPenDriveBackendInternalApiDtoMultipartUploadInitiateRequest, options?: RequestInit): Promise<postApiV1FilesUploadMultipartInitiateResponse> => {
+  
+  return customFetch<postApiV1FilesUploadMultipartInitiateResponse>(getPostApiV1FilesUploadMultipartInitiateUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      githubComAbhishekPenDriveBackendInternalApiDtoMultipartUploadInitiateRequest,)
+  }
+);}
+  
+
+
+/**
+ * Upload one multipart chunk through the backend into object storage
+ * @summary Upload multipart chunk
+ */
+export type postApiV1FilesUploadMultipartPartResponse200 = {
+  data: GithubComAbhishekPenDriveBackendInternalApiDtoMultipartUploadPartResponse
+  status: 200
+}
+
+export type postApiV1FilesUploadMultipartPartResponse400 = {
+  data: GithubComAbhishekPenDriveBackendInternalApiDtoErrorResponse
+  status: 400
+}
+
+export type postApiV1FilesUploadMultipartPartResponse401 = {
+  data: GithubComAbhishekPenDriveBackendInternalApiDtoErrorResponse
+  status: 401
+}
+
+export type postApiV1FilesUploadMultipartPartResponse500 = {
+  data: GithubComAbhishekPenDriveBackendInternalApiDtoErrorResponse
+  status: 500
+}
+
+export type postApiV1FilesUploadMultipartPartResponseSuccess = (postApiV1FilesUploadMultipartPartResponse200) & {
+  headers: Headers;
+};
+export type postApiV1FilesUploadMultipartPartResponseError = (postApiV1FilesUploadMultipartPartResponse400 | postApiV1FilesUploadMultipartPartResponse401 | postApiV1FilesUploadMultipartPartResponse500) & {
+  headers: Headers;
+};
+
+export type postApiV1FilesUploadMultipartPartResponse = (postApiV1FilesUploadMultipartPartResponseSuccess | postApiV1FilesUploadMultipartPartResponseError)
+
+export const getPostApiV1FilesUploadMultipartPartUrl = () => {
+
+
+  
+
+  return `/api/v1/files/upload-multipart/part`
+}
+
+export const postApiV1FilesUploadMultipartPart = async (postApiV1FilesUploadMultipartPartBody: PostApiV1FilesUploadMultipartPartBody, options?: RequestInit): Promise<postApiV1FilesUploadMultipartPartResponse> => {
+    const formData = new FormData();
+formData.append(`upload_id`, postApiV1FilesUploadMultipartPartBody.upload_id);
+formData.append(`key`, postApiV1FilesUploadMultipartPartBody.key);
+formData.append(`part_number`, postApiV1FilesUploadMultipartPartBody.part_number.toString())
+formData.append(`part`, postApiV1FilesUploadMultipartPartBody.part);
+
+  return customFetch<postApiV1FilesUploadMultipartPartResponse>(getPostApiV1FilesUploadMultipartPartUrl(),
   {      
     ...options,
     method: 'POST'

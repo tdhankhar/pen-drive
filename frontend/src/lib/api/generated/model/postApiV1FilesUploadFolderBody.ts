@@ -13,4 +13,6 @@ export type PostApiV1FilesUploadFolderBody = {
   relative_paths: string[];
   /** Destination folder path within bucket */
   path?: string;
+  /** Duplicate conflict policy: reject, rename, replace */
+  conflict_policy?: string;
 };

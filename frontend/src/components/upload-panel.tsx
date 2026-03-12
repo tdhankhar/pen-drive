@@ -14,7 +14,18 @@ import {
   useState,
 } from "react";
 
-import { apiBaseUrl } from "../lib/api/http";
+import {
+  postApiV1FilesUpload,
+  postApiV1FilesUploadMultipartAbort,
+  postApiV1FilesUploadMultipartComplete,
+  postApiV1FilesUploadMultipartInitiate,
+  postApiV1FilesUploadMultipartPart,
+} from "../lib/api/generated/client";
+import type {
+  GithubComAbhishekPenDriveBackendInternalApiDtoMultipartUploadInitiateResponse,
+  GithubComAbhishekPenDriveBackendInternalApiDtoMultipartUploadPartResponse,
+  PostApiV1FilesUploadBody,
+} from "../lib/api/generated/model";
 
 const MULTIPART_THRESHOLD_BYTES = 5 * 1024 * 1024;
 
@@ -35,18 +46,6 @@ type UploadMode = "file" | "folder";
 type UploadRuntime = {
   accessToken: string;
   currentPath: string;
-};
-
-type MultipartInitiateResponse = {
-  key: string;
-  name: string;
-  part_size: number;
-  upload_id: string;
-};
-
-type MultipartPartResponse = {
-  etag: string;
-  part_number: number;
 };
 
 export function UploadPanel({
@@ -420,29 +419,22 @@ async function uploadViaSingleRequest(
     throw new Error("file data is unavailable");
   }
 
-  const formData = new FormData();
-  formData.append("file", file.data, file.name);
+  const body: PostApiV1FilesUploadBody = {
+    file: new File([file.data], file.name, { type: file.type }),
+  };
   if (target.path) {
-    formData.append("path", target.path);
+    body.path = target.path;
   }
   if (target.filename !== file.name) {
-    formData.append("filename", target.filename);
+    body.filename = target.filename;
   }
 
-  const response = await fetch(`${apiBaseUrl}/api/v1/files/upload`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${runtime.accessToken}`,
-    },
-    body: formData,
-  });
-
-  const payload = await parseApiPayload(response);
-  if (!response.ok) {
-    throw new Error(getErrorMessage(payload, response.status));
+  const response = await postApiV1FilesUpload(body, authorizedRequest(runtime));
+  if (response.status !== 201) {
+    throw new Error(getErrorMessage(response.data, response.status));
   }
 
-  return payload as UploadBody | undefined;
+  return response.data as UploadBody | undefined;
 }
 
 async function uploadViaMultipart(
@@ -457,27 +449,19 @@ async function uploadViaMultipart(
     throw new Error("file data is unavailable");
   }
 
-  const initiateResponse = await fetch(
-    `${apiBaseUrl}/api/v1/files/upload-multipart/initiate`,
+  const initiateResponse = await postApiV1FilesUploadMultipartInitiate(
     {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${runtime.accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        content_type: file.type,
-        filename: target.filename,
-        path: target.path,
-        size: file.size,
-      }),
+      content_type: file.type,
+      filename: target.filename,
+      path: target.path,
+      size: file.size,
     },
+    authorizedRequest(runtime),
   );
-
-  const initiatePayload = await parseApiPayload(initiateResponse);
-  if (!initiateResponse.ok || !isMultipartInitiateResponse(initiatePayload)) {
-    throw new Error(getErrorMessage(initiatePayload, initiateResponse.status));
+  if (initiateResponse.status !== 201) {
+    throw new Error(getErrorMessage(initiateResponse.data, initiateResponse.status));
   }
+  const initiatePayload = requireMultipartSession(initiateResponse.data);
 
   const uploadedParts: Array<{ etag: string; part_number: number }> = [];
 
@@ -489,24 +473,21 @@ async function uploadViaMultipart(
       offset += initiatePayload.part_size
     ) {
       const chunk = file.data.slice(offset, offset + initiatePayload.part_size);
-      const formData = new FormData();
-      formData.append("upload_id", initiatePayload.upload_id);
-      formData.append("key", initiatePayload.key);
-      formData.append("part_number", String(partNumber));
-      formData.append("part", chunk, `${target.filename}.part-${partNumber}`);
-
-      const partResponse = await fetch(`${apiBaseUrl}/api/v1/files/upload-multipart/part`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${runtime.accessToken}`,
+      const partResponse = await postApiV1FilesUploadMultipartPart(
+        {
+          key: initiatePayload.key,
+          part: new File([chunk], `${target.filename}.part-${partNumber}`, {
+            type: "application/octet-stream",
+          }),
+          part_number: partNumber,
+          upload_id: initiatePayload.upload_id,
         },
-        body: formData,
-      });
-
-      const partPayload = await parseApiPayload(partResponse);
-      if (!partResponse.ok || !isMultipartPartResponse(partPayload)) {
-        throw new Error(getErrorMessage(partPayload, partResponse.status));
+        authorizedRequest(runtime),
+      );
+      if (partResponse.status !== 200) {
+        throw new Error(getErrorMessage(partResponse.data, partResponse.status));
       }
+      const partPayload = requireMultipartPart(partResponse.data);
 
       uploadedParts.push({
         etag: partPayload.etag,
@@ -515,28 +496,19 @@ async function uploadViaMultipart(
       partNumber += 1;
     }
 
-    const completeResponse = await fetch(
-      `${apiBaseUrl}/api/v1/files/upload-multipart/complete`,
+    const completeResponse = await postApiV1FilesUploadMultipartComplete(
       {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${runtime.accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          key: initiatePayload.key,
-          parts: uploadedParts,
-          upload_id: initiatePayload.upload_id,
-        }),
+        key: initiatePayload.key,
+        parts: uploadedParts,
+        upload_id: initiatePayload.upload_id,
       },
+      authorizedRequest(runtime),
     );
-
-    const completePayload = await parseApiPayload(completeResponse);
-    if (!completeResponse.ok) {
-      throw new Error(getErrorMessage(completePayload, completeResponse.status));
+    if (completeResponse.status !== 201) {
+      throw new Error(getErrorMessage(completeResponse.data, completeResponse.status));
     }
 
-    return completePayload as UploadBody | undefined;
+    return completeResponse.data as UploadBody | undefined;
   } catch (error) {
     await abortMultipartUpload(runtime, initiatePayload);
     throw error;
@@ -545,28 +517,23 @@ async function uploadViaMultipart(
 
 async function abortMultipartUpload(
   runtime: UploadRuntime,
-  multipart: MultipartInitiateResponse,
+  multipart: GithubComAbhishekPenDriveBackendInternalApiDtoMultipartUploadInitiateResponse,
 ) {
-  await fetch(`${apiBaseUrl}/api/v1/files/upload-multipart/abort`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${runtime.accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
+  await postApiV1FilesUploadMultipartAbort(
+    {
       key: multipart.key,
       upload_id: multipart.upload_id,
-    }),
-  });
+    },
+    authorizedRequest(runtime),
+  );
 }
 
-async function parseApiPayload(response: Response) {
-  const contentType = response.headers.get("Content-Type") || "";
-  if (!contentType.includes("application/json")) {
-    return undefined;
-  }
-
-  return (await response.json()) as unknown;
+function authorizedRequest(runtime: UploadRuntime): RequestInit {
+  return {
+    headers: {
+      Authorization: `Bearer ${runtime.accessToken}`,
+    },
+  };
 }
 
 function getErrorMessage(payload: unknown, status: number) {
@@ -585,32 +552,27 @@ function getErrorMessage(payload: unknown, status: number) {
   return `upload failed with status ${status}`;
 }
 
-function isMultipartInitiateResponse(
-  payload: unknown,
-): payload is MultipartInitiateResponse {
-  if (!payload || typeof payload !== "object") {
-    return false;
+function requireMultipartSession(
+  payload: GithubComAbhishekPenDriveBackendInternalApiDtoMultipartUploadInitiateResponse,
+) {
+  if (
+    !payload.key ||
+    !payload.upload_id ||
+    typeof payload.part_size !== "number" ||
+    !payload.name
+  ) {
+    throw new Error("multipart initiate response is incomplete");
   }
 
-  return (
-    "key" in payload &&
-    typeof payload.key === "string" &&
-    "part_size" in payload &&
-    typeof payload.part_size === "number" &&
-    "upload_id" in payload &&
-    typeof payload.upload_id === "string"
-  );
+  return payload as Required<GithubComAbhishekPenDriveBackendInternalApiDtoMultipartUploadInitiateResponse>;
 }
 
-function isMultipartPartResponse(payload: unknown): payload is MultipartPartResponse {
-  if (!payload || typeof payload !== "object") {
-    return false;
+function requireMultipartPart(
+  payload: GithubComAbhishekPenDriveBackendInternalApiDtoMultipartUploadPartResponse,
+) {
+  if (!payload.etag || typeof payload.part_number !== "number") {
+    throw new Error("multipart part response is incomplete");
   }
 
-  return (
-    "etag" in payload &&
-    typeof payload.etag === "string" &&
-    "part_number" in payload &&
-    typeof payload.part_number === "number"
-  );
+  return payload as Required<GithubComAbhishekPenDriveBackendInternalApiDtoMultipartUploadPartResponse>;
 }
