@@ -36,7 +36,7 @@ Verification result:
 
 Commit:
 
-- pending
+- `ef35ebf feat: add backend openapi contract`
 
 ### Checkpoint 1: Backend foundation boot
 

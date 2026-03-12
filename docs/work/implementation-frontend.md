@@ -57,4 +57,4 @@ Verification result:
 
 Commit:
 
-- pending
+- `422dfa3 feat: generate frontend api client`
