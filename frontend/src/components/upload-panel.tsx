@@ -14,6 +14,16 @@ import {
   useState,
 } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+
 import {
   postApiV1FilesDuplicatesPreview,
   postApiV1FilesUpload,
@@ -193,7 +203,7 @@ export function UploadPanel({
 
   return (
     <>
-      <section className="upload-grid">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <UploadCard
           description="Drag files onto the target or browse from this device. Files above 5 MB switch to multipart upload automatically."
           error={fileError}
@@ -201,31 +211,30 @@ export function UploadPanel({
           title="Quick file upload"
           uppy={fileUppy}
         />
-        <div className="upload-card">
-          <div className="upload-copy">
-            <p className="panel-label">Folder upload</p>
-            <h2>Preserve nested paths</h2>
-            <p>
+        <Card className="flex flex-col gap-2">
+          <CardHeader>
+            <CardTitle>Preserve nested paths</CardTitle>
+            <CardDescription>
               Drag a folder onto the target or pick one from disk. Each item lands
               under <code>{currentPath || "root"}</code>, and files above 5 MB use
               multipart upload.
-            </p>
-          </div>
-          <div className="upload-toolbar">
-            <button
-              className="secondary-button"
+            </CardDescription>
+          </CardHeader>
+          <div className="flex gap-2 px-6">
+            <Button
+              variant="outline"
               onClick={() => folderInputRef.current?.click()}
               type="button"
             >
               Pick folder
-            </button>
-            <button
-              className="secondary-button"
+            </Button>
+            <Button
+              variant="outline"
               onClick={() => folderUppy.cancelAll()}
               type="button"
             >
               Clear queue
-            </button>
+            </Button>
           </div>
           <input
             className="sr-only"
@@ -242,12 +251,14 @@ export function UploadPanel({
             description="Drop a folder here or pick one using the button above."
             uppy={folderUppy}
           />
-          {folderMessage ? <p className="upload-feedback">{folderMessage}</p> : null}
-          {folderError ? (
-            <p className="upload-feedback upload-feedback-error">{folderError}</p>
+          {folderMessage ? (
+            <p className="text-sm text-muted-foreground px-6 pb-2">{folderMessage}</p>
           ) : null}
-        </div>
-      </section>
+          {folderError ? (
+            <p className="text-sm text-muted-foreground text-destructive px-6 pb-2">{folderError}</p>
+          ) : null}
+        </Card>
+      </div>
       {conflictDialog ? (
         <ConflictPreviewDialog
           conflictDialog={conflictDialog}
@@ -273,28 +284,31 @@ function UploadCard({
   uppy: Uppy<UploadMeta, UploadBody>;
 }) {
   return (
-    <div className="upload-card">
-      <div className="upload-copy">
-        <p className="panel-label">Upload</p>
-        <h2>{title}</h2>
-        <p>{description}</p>
-      </div>
-      <div className="upload-toolbar">
-        <button
-          className="secondary-button"
+    <Card className="flex flex-col gap-2">
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <div className="flex gap-2 px-6">
+        <Button
+          variant="outline"
           onClick={() => uppy.cancelAll()}
           type="button"
         >
           Clear queue
-        </button>
+        </Button>
       </div>
       <UppySurface
         description="Drag files here or click the surface to browse."
         uppy={uppy}
       />
-      {message ? <p className="upload-feedback">{message}</p> : null}
-      {error ? <p className="upload-feedback upload-feedback-error">{error}</p> : null}
-    </div>
+      {message ? (
+        <p className="text-sm text-muted-foreground px-6 pb-2">{message}</p>
+      ) : null}
+      {error ? (
+        <p className="text-sm text-muted-foreground text-destructive px-6 pb-2">{error}</p>
+      ) : null}
+    </Card>
   );
 }
 
@@ -309,10 +323,10 @@ function UppySurface({
 
   return (
     <UppyContextProvider uppy={uppy}>
-      <div className="uppy-shell">
+      <div className="flex flex-col gap-2 px-6 pb-6">
         <Dropzone height="180px" note={description} width="100%" />
-        <div className="uppy-footer">
-          <p className="uppy-queue">{fileCount} queued</p>
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">{fileCount} queued</p>
           <UploadButton />
         </div>
         <FilesList />
@@ -702,61 +716,34 @@ function ConflictPreviewDialog({
   onSelect: (policy: UploadConflictPolicy) => void;
 }) {
   return (
-    <div className="conflict-dialog-backdrop" role="presentation">
-      <div
-        aria-labelledby="conflict-dialog-title"
-        aria-modal="true"
-        className="conflict-dialog"
-        role="dialog"
-      >
-        <div className="conflict-dialog-copy">
-          <p className="panel-label">Duplicate preview</p>
-          <h2 id="conflict-dialog-title">Conflicts found in this upload</h2>
-          <p>
-            {conflictDialog.mode === "folder" ? "Folder upload" : "File upload"}{" "}
-            would affect {conflictDialog.impactedPaths.length} existing
-            {conflictDialog.impactedPaths.length === 1 ? " path" : " paths"}.
-          </p>
-        </div>
-        <div className="conflict-dialog-list">
+    <Dialog open={true} onOpenChange={(open) => !open && onCancel()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Conflicts found in this upload</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
           {conflictDialog.items
             .filter((item) => item.conflict)
             .map((item, index) => (
-              <article
-                className="conflict-item"
+              <div
+                className="rounded border p-3 text-sm space-y-1"
                 key={item.requested_path || item.rename_path || `conflict-${index}`}
               >
-                <p>
-                  <strong>Existing</strong>
-                  <span>{item.existing_path || item.requested_path || "unknown"}</span>
-                </p>
-                <p>
-                  <strong>Rename target</strong>
-                  <span>{item.rename_path || "not available"}</span>
-                </p>
-              </article>
+                <p><span className="font-medium">Existing: </span>{item.existing_path || item.requested_path || "unknown"}</p>
+                <p><span className="font-medium">Rename target: </span>{item.rename_path || "not available"}</p>
+              </div>
             ))}
         </div>
-        <div className="conflict-dialog-actions">
-          <button className="secondary-button" onClick={onCancel} type="button">
-            Cancel upload
-          </button>
-          <button
-            className="secondary-button"
-            onClick={() => onSelect(DuplicateConflictPolicy.DUPLICATE_CONFLICT_POLICY_RENAME)}
-            type="button"
-          >
+        <DialogFooter>
+          <Button variant="outline" onClick={onCancel}>Cancel upload</Button>
+          <Button variant="outline" onClick={() => onSelect(DuplicateConflictPolicy.DUPLICATE_CONFLICT_POLICY_RENAME)}>
             Create renamed copies
-          </button>
-          <button
-            className="primary-button"
-            onClick={() => onSelect(DuplicateConflictPolicy.DUPLICATE_CONFLICT_POLICY_REPLACE)}
-            type="button"
-          >
+          </Button>
+          <Button onClick={() => onSelect(DuplicateConflictPolicy.DUPLICATE_CONFLICT_POLICY_REPLACE)}>
             Replace existing files
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

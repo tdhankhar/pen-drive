@@ -169,13 +169,6 @@
   margin-bottom: 1rem;
 }
 
-.upload-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
 .panel {
   padding: 1.5rem;
   border-radius: 1.3rem;
@@ -211,181 +204,6 @@
   border: 1px solid rgba(24, 78, 119, 0.1);
 }
 
-.upload-card {
-  display: grid;
-  gap: 1rem;
-  padding: 1.4rem;
-  border-radius: 1.4rem;
-  background:
-    radial-gradient(circle at top right, rgba(118, 200, 147, 0.18), transparent 30%),
-    rgba(255, 255, 255, 0.82);
-  border: 1px solid rgba(24, 78, 119, 0.1);
-  box-shadow: 0 18px 48px rgba(8, 43, 54, 0.06);
-}
-
-.upload-copy {
-  display: grid;
-  gap: 0.55rem;
-}
-
-.upload-copy h2 {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 1.8rem;
-  line-height: 0.95;
-}
-
-.upload-copy p {
-  margin: 0;
-}
-
-.upload-toolbar,
-.uppy-footer {
-  display: flex;
-  gap: 0.75rem;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.uppy-shell {
-  display: grid;
-  gap: 0.9rem;
-}
-
-.uppy-shell [data-uppy-element="dropzone"] {
-  border-radius: 1.15rem;
-  border: 1px dashed rgba(24, 78, 119, 0.22);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(232, 246, 249, 0.9));
-  color: var(--ink);
-}
-
-.uppy-shell [data-uppy-element="dropzone"] button {
-  color: #1e6091;
-  font-weight: 700;
-}
-
-.uppy-shell [data-uppy-element="upload-button"] {
-  border: 0;
-  border-radius: 999px;
-  padding: 0.9rem 1.25rem;
-  color: white;
-  font: inherit;
-  font-weight: 700;
-  background: linear-gradient(135deg, #168aad, #1e6091);
-  cursor: pointer;
-}
-
-.uppy-shell [data-uppy-element="upload-button"][disabled] {
-  opacity: 0.72;
-  cursor: not-allowed;
-}
-
-.uppy-shell [data-uppy-element="files-list"] {
-  display: grid;
-  gap: 0.75rem;
-}
-
-.uppy-shell [data-uppy-element="file-card"] {
-  border-radius: 1rem;
-  border: 1px solid rgba(24, 78, 119, 0.1);
-  background: rgba(255, 255, 255, 0.94);
-}
-
-.uppy-shell [data-uppy-element="file-info"] {
-  color: var(--ink);
-}
-
-.uppy-shell [data-uppy-element="file-name"] {
-  font-weight: 700;
-}
-
-.uppy-shell [data-uppy-element="file-meta"] {
-  color: var(--ink-muted);
-}
-
-.uppy-queue,
-.upload-feedback {
-  margin: 0;
-  color: var(--ink-muted);
-}
-
-.upload-feedback {
-  padding: 0.9rem 1rem;
-  border-radius: 1rem;
-  background: rgba(22, 138, 173, 0.08);
-}
-
-.upload-feedback-error {
-  color: #8f2121;
-  background: rgba(201, 49, 49, 0.08);
-}
-
-.conflict-dialog-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  display: grid;
-  place-items: center;
-  padding: 1.5rem;
-  background: rgba(16, 42, 67, 0.4);
-  backdrop-filter: blur(10px);
-}
-
-.conflict-dialog {
-  width: min(100%, 46rem);
-  display: grid;
-  gap: 1.1rem;
-  padding: 1.5rem;
-  border-radius: 1.4rem;
-  background:
-    radial-gradient(circle at top right, rgba(118, 200, 147, 0.18), transparent 28%),
-    rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(24, 78, 119, 0.12);
-  box-shadow: 0 24px 60px rgba(8, 43, 54, 0.2);
-}
-
-.conflict-dialog-copy,
-.conflict-item {
-  display: grid;
-  gap: 0.55rem;
-}
-
-.conflict-dialog-copy h2,
-.conflict-item p {
-  margin: 0;
-}
-
-.conflict-dialog-list {
-  display: grid;
-  gap: 0.8rem;
-  max-height: min(50vh, 24rem);
-  overflow: auto;
-}
-
-.conflict-item {
-  padding: 0.95rem 1rem;
-  border-radius: 1rem;
-  border: 1px solid rgba(24, 78, 119, 0.1);
-  background: rgba(244, 251, 253, 0.92);
-}
-
-.conflict-item strong {
-  color: var(--ink);
-}
-
-.conflict-item span {
-  color: var(--ink-muted);
-  overflow-wrap: anywhere;
-}
-
-.conflict-dialog-actions {
-  display: flex;
-  gap: 0.75rem;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-}
 
 .sr-only {
   position: absolute;
@@ -490,19 +308,9 @@
   }
 
   .dashboard-header,
-  .dashboard-grid,
-  .upload-grid {
+  .dashboard-grid {
     grid-template-columns: 1fr;
     display: grid;
-  }
-
-  .conflict-dialog-actions {
-    justify-content: stretch;
-  }
-
-  .conflict-dialog-actions .primary-button,
-  .conflict-dialog-actions .secondary-button {
-    width: 100%;
   }
 
   .entry-button {
