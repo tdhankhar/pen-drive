@@ -6,6 +6,38 @@ This file tracks frontend-only implementation progress, verification evidence, a
 
 ## Checkpoints
 
+### Checkpoint 4: File browser shell wired to list API
+
+Goal:
+
+- connect the dashboard to the backend list API
+- show folders and files for the current path
+- support folder navigation and basic loading/error states
+
+Verification steps:
+
+- regenerate backend OpenAPI
+- regenerate frontend API client
+- `make frontend-lint`
+- `make frontend-build`
+- browser verification: root listing renders
+- browser verification: nested folder navigation renders correct entries
+
+Verification result:
+
+- passed on 2026-03-12
+- `make backend-openapi`: passed
+- `cd frontend && npm run api:generate`: passed
+- `make frontend-lint`: passed
+- `make frontend-build`: passed
+- browser verification with Playwright: root listing rendered seeded folder and file entries
+- browser verification with Playwright: navigating into `docs` rendered nested folder and file entries
+- dashboard now uses the generated list client against the authenticated backend
+
+Commit:
+
+- pending
+
 ### Checkpoint 1: Frontend foundation scaffold
 
 Goal:

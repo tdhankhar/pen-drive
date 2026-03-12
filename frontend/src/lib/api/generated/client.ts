@@ -6,10 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
+  GetApiV1FilesParams,
   GithubComAbhishekPenDriveBackendInternalApiDtoAuthResponse,
   GithubComAbhishekPenDriveBackendInternalApiDtoAuthenticatedUser,
   GithubComAbhishekPenDriveBackendInternalApiDtoCredentialsRequest,
   GithubComAbhishekPenDriveBackendInternalApiDtoErrorResponse,
+  GithubComAbhishekPenDriveBackendInternalApiDtoFileListResponse,
   GithubComAbhishekPenDriveBackendInternalApiDtoRefreshRequest
 } from './model';
 
@@ -170,6 +172,67 @@ export const postApiV1AuthSignup = async (githubComAbhishekPenDriveBackendIntern
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(
       githubComAbhishekPenDriveBackendInternalApiDtoCredentialsRequest,)
+  }
+);}
+
+
+
+/**
+ * List folders and files under the authenticated user's bucket path.
+ * @summary List files
+ */
+export type getApiV1FilesResponse200 = {
+  data: GithubComAbhishekPenDriveBackendInternalApiDtoFileListResponse
+  status: 200
+}
+
+export type getApiV1FilesResponse400 = {
+  data: GithubComAbhishekPenDriveBackendInternalApiDtoErrorResponse
+  status: 400
+}
+
+export type getApiV1FilesResponse401 = {
+  data: GithubComAbhishekPenDriveBackendInternalApiDtoErrorResponse
+  status: 401
+}
+
+export type getApiV1FilesResponse500 = {
+  data: GithubComAbhishekPenDriveBackendInternalApiDtoErrorResponse
+  status: 500
+}
+    
+export type getApiV1FilesResponseSuccess = (getApiV1FilesResponse200) & {
+  headers: Headers;
+};
+export type getApiV1FilesResponseError = (getApiV1FilesResponse400 | getApiV1FilesResponse401 | getApiV1FilesResponse500) & {
+  headers: Headers;
+};
+
+export type getApiV1FilesResponse = (getApiV1FilesResponseSuccess | getApiV1FilesResponseError)
+
+export const getGetApiV1FilesUrl = (params?: GetApiV1FilesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/files?${stringifiedParams}` : `/api/v1/files`
+}
+
+export const getApiV1Files = async (params?: GetApiV1FilesParams, options?: RequestInit): Promise<getApiV1FilesResponse> => {
+  
+  return customFetch<getApiV1FilesResponse>(getGetApiV1FilesUrl(params),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
   }
 );}
 

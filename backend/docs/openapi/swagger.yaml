@@ -39,6 +39,40 @@ definitions:
       error:
         $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorPayload'
     type: object
+  github_com_abhishek_pen-drive_backend_internal_api_dto.FileListResponse:
+    properties:
+      entries:
+        items:
+          $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.FileSystemEntry'
+        type: array
+      has_more:
+        example: false
+        type: boolean
+      next_continuation_token:
+        example: token-123
+        type: string
+      path:
+        example: docs
+        type: string
+    type: object
+  github_com_abhishek_pen-drive_backend_internal_api_dto.FileSystemEntry:
+    properties:
+      last_modified:
+        example: "2026-03-12T16:00:00Z"
+        type: string
+      name:
+        example: photo.jpg
+        type: string
+      path:
+        example: photos/photo.jpg
+        type: string
+      size:
+        example: 2048
+        type: integer
+      type:
+        example: file
+        type: string
+    type: object
   github_com_abhishek_pen-drive_backend_internal_api_dto.RefreshRequest:
     properties:
       refresh_token:
@@ -164,6 +198,46 @@ paths:
       summary: Sign up
       tags:
       - auth
+  /api/v1/files:
+    get:
+      description: List folders and files under the authenticated user's bucket path.
+      parameters:
+      - description: Relative folder path
+        in: query
+        name: path
+        type: string
+      - description: Continuation token from previous page
+        in: query
+        name: continuation_token
+        type: string
+      - description: Max keys to request from S3-compatible storage
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.FileListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List files
+      tags:
+      - files
   /api/v1/me:
     get:
       description: Return the authenticated user from the access token.

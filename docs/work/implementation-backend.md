@@ -39,7 +39,7 @@ Verification result:
 
 Commit:
 
-- pending
+- `001ec6e feat: add file listing api`
 
 ### Checkpoint 4: Backend DTO contract and OpenAPI generation
 

@@ -165,6 +165,69 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/files": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "List folders and files under the authenticated user's bucket path.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "files"
+                ],
+                "summary": "List files",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Relative folder path",
+                        "name": "path",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Continuation token from previous page",
+                        "name": "continuation_token",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Max keys to request from S3-compatible storage",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.FileListResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/me": {
             "get": {
                 "security": [
@@ -253,6 +316,54 @@ const docTemplate = `{
             "properties": {
                 "error": {
                     "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorPayload"
+                }
+            }
+        },
+        "github_com_abhishek_pen-drive_backend_internal_api_dto.FileListResponse": {
+            "type": "object",
+            "properties": {
+                "entries": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.FileSystemEntry"
+                    }
+                },
+                "has_more": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "next_continuation_token": {
+                    "type": "string",
+                    "example": "token-123"
+                },
+                "path": {
+                    "type": "string",
+                    "example": "docs"
+                }
+            }
+        },
+        "github_com_abhishek_pen-drive_backend_internal_api_dto.FileSystemEntry": {
+            "type": "object",
+            "properties": {
+                "last_modified": {
+                    "type": "string",
+                    "example": "2026-03-12T16:00:00Z"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "photo.jpg"
+                },
+                "path": {
+                    "type": "string",
+                    "example": "photos/photo.jpg"
+                },
+                "size": {
+                    "type": "integer",
+                    "example": 2048
+                },
+                "type": {
+                    "type": "string",
+                    "example": "file"
                 }
             }
         },
