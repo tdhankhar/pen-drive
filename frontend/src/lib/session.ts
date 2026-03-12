@@ -3,11 +3,11 @@ import {
   postApiV1AuthLogin,
   postApiV1AuthRefresh,
   postApiV1AuthSignup,
-} from "./api/generated/client";
+} from "./api/generated";
 import type {
   GithubComAbhishekPenDriveBackendInternalApiDtoAuthenticatedUser,
   GithubComAbhishekPenDriveBackendInternalApiDtoCredentialsRequest,
-} from "./api/generated/model";
+} from "./api/generated";
 
 type SessionState = {
   accessToken: string;

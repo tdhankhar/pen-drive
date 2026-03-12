@@ -4,13 +4,14 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "api:generate": "orval --config orval.config.ts && node scripts/fix-folder-upload-client.mjs",
+    "api:generate": "openapi-ts",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint . && eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@hey-api/client-fetch": "^0.13.1",
     "@uppy/core": "^5.2.0",
     "@uppy/react": "^5.2.0",
     "react": "^19.2.4",
@@ -19,6 +20,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "@hey-api/openapi-ts": "^0.94.1",
     "@types/node": "^24.12.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
@@ -27,7 +29,6 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.4.0",
-    "orval": "^8.5.3",
     "oxlint": "^1.29.0",
     "playwright": "^1.58.2",
     "typescript": "~5.9.3",

@@ -2,11 +2,11 @@ import { useEffect, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
 
 import { UploadPanel } from "../components/upload-panel";
-import { getApiV1Files } from "../lib/api/generated/client";
+import { getApiV1Files } from "../lib/api/generated";
 import type {
   GithubComAbhishekPenDriveBackendInternalApiDtoFileListResponse,
   GithubComAbhishekPenDriveBackendInternalApiDtoFileSystemEntry,
-} from "../lib/api/generated/model";
+} from "../lib/api/generated";
 import { useAuth } from "../lib/use-auth";
 
 export function DashboardPage() {

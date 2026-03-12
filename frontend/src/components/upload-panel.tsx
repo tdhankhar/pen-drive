@@ -21,16 +21,23 @@ import {
   postApiV1FilesUploadMultipartComplete,
   postApiV1FilesUploadMultipartInitiate,
   postApiV1FilesUploadMultipartPart,
-} from "../lib/api/generated/client";
+  GithubComAbhishekPenDriveBackendInternalApiDtoDuplicateConflictPolicy as DuplicateConflictPolicy,
+} from "../lib/api/generated";
 import type {
   GithubComAbhishekPenDriveBackendInternalApiDtoDuplicateConflictPolicy,
   GithubComAbhishekPenDriveBackendInternalApiDtoDuplicatePreviewItem,
   GithubComAbhishekPenDriveBackendInternalApiDtoDuplicatePreviewResponse,
   GithubComAbhishekPenDriveBackendInternalApiDtoMultipartUploadInitiateResponse,
   GithubComAbhishekPenDriveBackendInternalApiDtoMultipartUploadPartResponse,
-  PostApiV1FilesUploadBody,
-} from "../lib/api/generated/model";
-import { GithubComAbhishekPenDriveBackendInternalApiDtoDuplicateConflictPolicy as DuplicateConflictPolicy } from "../lib/api/generated/model";
+} from "../lib/api/generated";
+
+// TODO(Task 2): replace with PostApiV1FilesUploadData['body'] from generated types
+type PostApiV1FilesUploadBody = {
+  file: Blob | File;
+  path?: string;
+  filename?: string;
+  conflict_policy?: string;
+};
 
 const MULTIPART_THRESHOLD_BYTES = 5 * 1024 * 1024;
 
