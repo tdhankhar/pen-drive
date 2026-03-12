@@ -112,8 +112,4 @@ Verification result:
 
 Commit:
 
-- pending
-
-Commit:
-
-- pending
+- `0f9458b feat: add backend auth and provisioning`
