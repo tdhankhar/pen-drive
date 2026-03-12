@@ -235,6 +235,218 @@ func (h *Handler) UploadFolder(c *gin.Context) {
 	})
 }
 
+// InitiateMultipartUpload godoc
+// @Summary Initiate multipart upload
+// @Description Start an S3 multipart upload for a file larger than 5 MB via the backend
+// @Tags files
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param payload body dto.MultipartUploadInitiateRequest true "Multipart upload payload"
+// @Success 201 {object} dto.MultipartUploadInitiateResponse
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 401 {object} dto.ErrorResponse
+// @Failure 409 {object} dto.ErrorResponse
+// @Failure 500 {object} dto.ErrorResponse
+// @Router /api/v1/files/upload-multipart/initiate [post]
+func (h *Handler) InitiateMultipartUpload(c *gin.Context) {
+	userID, _ := c.Get("auth.user_id")
+
+	var request dto.MultipartUploadInitiateRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		respondError(c, http.StatusBadRequest, "invalid_input", "request body is invalid")
+		return
+	}
+
+	session, err := h.service.InitiateMultipartUpload(
+		c.Request.Context(),
+		userID.(string),
+		request.Path,
+		request.Filename,
+		request.ContentType,
+	)
+	if err != nil {
+		if errors.Is(err, storage.ErrObjectAlreadyExists) {
+			respondError(c, http.StatusConflict, "file_exists", err.Error())
+			return
+		}
+		if errors.Is(err, ErrInvalidUploadInput) {
+			respondError(c, http.StatusBadRequest, "invalid_input", err.Error())
+			return
+		}
+		respondError(c, http.StatusInternalServerError, "upload_failed", err.Error())
+		return
+	}
+
+	c.JSON(http.StatusCreated, dto.MultipartUploadInitiateResponse{
+		UploadID: session.UploadID,
+		Key:      session.Key,
+		Name:     session.Name,
+		PartSize: session.PartSize,
+	})
+}
+
+// UploadMultipartPart godoc
+// @Summary Upload multipart chunk
+// @Description Upload one multipart chunk through the backend into object storage
+// @Tags files
+// @Accept multipart/form-data
+// @Produce json
+// @Security BearerAuth
+// @Param upload_id formData string true "Multipart upload id"
+// @Param key formData string true "Final object key"
+// @Param part_number formData int true "Part number"
+// @Param part formData file true "Multipart chunk payload"
+// @Success 200 {object} dto.MultipartUploadPartResponse
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 401 {object} dto.ErrorResponse
+// @Failure 500 {object} dto.ErrorResponse
+// @Router /api/v1/files/upload-multipart/part [post]
+func (h *Handler) UploadMultipartPart(c *gin.Context) {
+	userID, _ := c.Get("auth.user_id")
+
+	partNumberValue, err := strconv.Atoi(c.PostForm("part_number"))
+	if err != nil || partNumberValue <= 0 {
+		respondError(c, http.StatusBadRequest, "invalid_input", "part_number must be greater than zero")
+		return
+	}
+
+	key := c.PostForm("key")
+	uploadID := c.PostForm("upload_id")
+
+	partFile, err := c.FormFile("part")
+	if err != nil {
+		respondError(c, http.StatusBadRequest, "missing_file", "part field is required")
+		return
+	}
+
+	src, err := partFile.Open()
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "file_open_failed", err.Error())
+		return
+	}
+	defer src.Close()
+
+	result, err := h.service.UploadMultipartPart(
+		c.Request.Context(),
+		userID.(string),
+		key,
+		uploadID,
+		int32(partNumberValue),
+		src,
+		partFile.Size,
+	)
+	if err != nil {
+		if errors.Is(err, ErrInvalidUploadInput) {
+			respondError(c, http.StatusBadRequest, "invalid_input", err.Error())
+			return
+		}
+		respondError(c, http.StatusInternalServerError, "upload_failed", err.Error())
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.MultipartUploadPartResponse{
+		PartNumber: result.PartNumber,
+		ETag:       result.ETag,
+	})
+}
+
+// CompleteMultipartUpload godoc
+// @Summary Complete multipart upload
+// @Description Complete an S3 multipart upload after all parts are uploaded
+// @Tags files
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param payload body dto.MultipartUploadCompleteRequest true "Multipart complete payload"
+// @Success 201 {object} dto.FileUploadResponse
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 401 {object} dto.ErrorResponse
+// @Failure 500 {object} dto.ErrorResponse
+// @Router /api/v1/files/upload-multipart/complete [post]
+func (h *Handler) CompleteMultipartUpload(c *gin.Context) {
+	userID, _ := c.Get("auth.user_id")
+
+	var request dto.MultipartUploadCompleteRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		respondError(c, http.StatusBadRequest, "invalid_input", "request body is invalid")
+		return
+	}
+
+	parts := make([]storage.CompletedPart, 0, len(request.Parts))
+	for _, part := range request.Parts {
+		parts = append(parts, storage.CompletedPart{
+			ETag:       part.ETag,
+			PartNumber: part.PartNumber,
+		})
+	}
+
+	result, err := h.service.CompleteMultipartUpload(
+		c.Request.Context(),
+		userID.(string),
+		request.Key,
+		request.UploadID,
+		parts,
+	)
+	if err != nil {
+		if errors.Is(err, ErrInvalidUploadInput) {
+			respondError(c, http.StatusBadRequest, "invalid_input", err.Error())
+			return
+		}
+		respondError(c, http.StatusInternalServerError, "upload_failed", err.Error())
+		return
+	}
+
+	c.JSON(http.StatusCreated, dto.FileUploadResponse{
+		File: dto.UploadedFileInfo{
+			Name:       result.Name,
+			Path:       result.Path,
+			Size:       result.Size,
+			UploadedAt: result.UploadedAt,
+		},
+	})
+}
+
+// AbortMultipartUpload godoc
+// @Summary Abort multipart upload
+// @Description Abort an in-flight multipart upload and clean up uploaded parts
+// @Tags files
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param payload body dto.MultipartUploadAbortRequest true "Multipart abort payload"
+// @Success 204
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 401 {object} dto.ErrorResponse
+// @Failure 500 {object} dto.ErrorResponse
+// @Router /api/v1/files/upload-multipart/abort [post]
+func (h *Handler) AbortMultipartUpload(c *gin.Context) {
+	userID, _ := c.Get("auth.user_id")
+
+	var request dto.MultipartUploadAbortRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		respondError(c, http.StatusBadRequest, "invalid_input", "request body is invalid")
+		return
+	}
+
+	err := h.service.AbortMultipartUpload(
+		c.Request.Context(),
+		userID.(string),
+		request.Key,
+		request.UploadID,
+	)
+	if err != nil {
+		if errors.Is(err, ErrInvalidUploadInput) {
+			respondError(c, http.StatusBadRequest, "invalid_input", err.Error())
+			return
+		}
+		respondError(c, http.StatusInternalServerError, "upload_failed", err.Error())
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
 func respondError(c *gin.Context, status int, code, message string) {
 	c.JSON(status, dto.ErrorResponse{
 		Error: dto.ErrorPayload{

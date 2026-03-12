@@ -14,9 +14,17 @@ import (
 )
 
 type stubStorageClient struct {
-	putInputs []storage.PutObjectInput
-	putErr    error
-	putErrFor map[string]error
+	putInputs                   []storage.PutObjectInput
+	putErr                      error
+	putErrFor                   map[string]error
+	startMultipartInput         storage.StartMultipartUploadInput
+	startMultipartErr           error
+	uploadPartInputs            []storage.UploadPartInput
+	uploadPartErr               error
+	completeMultipartInput      storage.CompleteMultipartUploadInput
+	completeMultipartErr        error
+	abortMultipartInput         storage.AbortMultipartUploadInput
+	abortMultipartErr           error
 }
 
 func (s *stubStorageClient) ListPath(context.Context, storage.ListPathInput) (storage.ListPathResult, error) {
@@ -35,6 +43,44 @@ func (s *stubStorageClient) PutObject(_ context.Context, input storage.PutObject
 	}
 
 	return storage.PutObjectResult{Key: input.Key}, nil
+}
+
+func (s *stubStorageClient) StartMultipartUpload(_ context.Context, input storage.StartMultipartUploadInput) (storage.StartMultipartUploadResult, error) {
+	s.startMultipartInput = input
+	if s.startMultipartErr != nil {
+		return storage.StartMultipartUploadResult{}, s.startMultipartErr
+	}
+	return storage.StartMultipartUploadResult{
+		UploadID: "upload-123",
+		Key:      input.Key,
+	}, nil
+}
+
+func (s *stubStorageClient) UploadPart(_ context.Context, input storage.UploadPartInput) (storage.UploadPartResult, error) {
+	s.uploadPartInputs = append(s.uploadPartInputs, input)
+	if s.uploadPartErr != nil {
+		return storage.UploadPartResult{}, s.uploadPartErr
+	}
+	return storage.UploadPartResult{
+		ETag:       "\"etag-part\"",
+		PartNumber: input.PartNumber,
+	}, nil
+}
+
+func (s *stubStorageClient) CompleteMultipartUpload(_ context.Context, input storage.CompleteMultipartUploadInput) (storage.PutObjectResult, error) {
+	s.completeMultipartInput = input
+	if s.completeMultipartErr != nil {
+		return storage.PutObjectResult{}, s.completeMultipartErr
+	}
+	return storage.PutObjectResult{
+		Key:  input.Key,
+		ETag: "\"etag-final\"",
+	}, nil
+}
+
+func (s *stubStorageClient) AbortMultipartUpload(_ context.Context, input storage.AbortMultipartUploadInput) error {
+	s.abortMultipartInput = input
+	return s.abortMultipartErr
 }
 
 func TestValidateDestinationPath(t *testing.T) {
@@ -490,6 +536,123 @@ func TestUploadFolderUploadsInDeterministicOrderAndPreservesMetadata(t *testing.
 	}
 	if metadata["uploaded-at"] == "" {
 		t.Fatalf("expected uploaded-at metadata")
+	}
+}
+
+func TestInitiateMultipartUploadPassesMetadata(t *testing.T) {
+	t.Parallel()
+
+	storageClient := &stubStorageClient{}
+	service := NewService(storageClient)
+
+	session, err := service.InitiateMultipartUpload(
+		context.Background(),
+		"user-123",
+		"videos",
+		" clip .mp4 ",
+		"video/mp4",
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if session.Key != "videos/clip .mp4" {
+		t.Fatalf("expected sanitized key, got %q", session.Key)
+	}
+	if session.PartSize != multipartPartSize {
+		t.Fatalf("expected multipart part size %d, got %d", multipartPartSize, session.PartSize)
+	}
+	if storageClient.startMultipartInput.Metadata["original-filename"] != " clip .mp4 " {
+		t.Fatalf("expected original filename metadata")
+	}
+	if storageClient.startMultipartInput.Metadata["stored-filename"] != "clip .mp4" {
+		t.Fatalf("expected stored filename metadata")
+	}
+}
+
+func TestUploadMultipartPartRejectsInvalidInput(t *testing.T) {
+	t.Parallel()
+
+	service := NewService(&stubStorageClient{})
+
+	_, err := service.UploadMultipartPart(
+		context.Background(),
+		"user-123",
+		"",
+		"upload-123",
+		1,
+		bytes.NewBufferString("chunk"),
+		int64(len("chunk")),
+	)
+	if err == nil || !errors.Is(err, ErrInvalidUploadInput) {
+		t.Fatalf("expected invalid input error, got %v", err)
+	}
+}
+
+func TestUploadMultipartPartPassesChunk(t *testing.T) {
+	t.Parallel()
+
+	storageClient := &stubStorageClient{}
+	service := NewService(storageClient)
+
+	result, err := service.UploadMultipartPart(
+		context.Background(),
+		"user-123",
+		"videos/clip.mp4",
+		"upload-123",
+		2,
+		bytes.NewBufferString("chunk"),
+		int64(len("chunk")),
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.PartNumber != 2 {
+		t.Fatalf("expected part number 2, got %d", result.PartNumber)
+	}
+	if len(storageClient.uploadPartInputs) != 1 {
+		t.Fatalf("expected one part upload, got %d", len(storageClient.uploadPartInputs))
+	}
+}
+
+func TestCompleteMultipartUploadSortsParts(t *testing.T) {
+	t.Parallel()
+
+	storageClient := &stubStorageClient{}
+	service := NewService(storageClient)
+
+	result, err := service.CompleteMultipartUpload(
+		context.Background(),
+		"user-123",
+		"videos/clip.mp4",
+		"upload-123",
+		[]storage.CompletedPart{
+			{ETag: "\"two\"", PartNumber: 2},
+			{ETag: "\"one\"", PartNumber: 1},
+		},
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Path != "videos/clip.mp4" {
+		t.Fatalf("expected completed path, got %q", result.Path)
+	}
+	if storageClient.completeMultipartInput.Parts[0].PartNumber != 1 {
+		t.Fatalf("expected sorted parts, got %+v", storageClient.completeMultipartInput.Parts)
+	}
+}
+
+func TestAbortMultipartUploadPassesIdentifiers(t *testing.T) {
+	t.Parallel()
+
+	storageClient := &stubStorageClient{}
+	service := NewService(storageClient)
+
+	if err := service.AbortMultipartUpload(context.Background(), "user-123", "videos/clip.mp4", "upload-123"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if storageClient.abortMultipartInput.Key != "videos/clip.mp4" || storageClient.abortMultipartInput.UploadID != "upload-123" {
+		t.Fatalf("unexpected abort input: %+v", storageClient.abortMultipartInput)
 	}
 }
 

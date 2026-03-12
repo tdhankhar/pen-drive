@@ -372,6 +372,256 @@
                 }
             }
         },
+        "/api/v1/files/upload-multipart/abort": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Abort an in-flight multipart upload and clean up uploaded parts",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "files"
+                ],
+                "summary": "Abort multipart upload",
+                "parameters": [
+                    {
+                        "description": "Multipart abort payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.MultipartUploadAbortRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/files/upload-multipart/complete": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Complete an S3 multipart upload after all parts are uploaded",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "files"
+                ],
+                "summary": "Complete multipart upload",
+                "parameters": [
+                    {
+                        "description": "Multipart complete payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.MultipartUploadCompleteRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.FileUploadResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/files/upload-multipart/initiate": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Start an S3 multipart upload for a file larger than 5 MB via the backend",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "files"
+                ],
+                "summary": "Initiate multipart upload",
+                "parameters": [
+                    {
+                        "description": "Multipart upload payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.MultipartUploadInitiateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.MultipartUploadInitiateResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/files/upload-multipart/part": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Upload one multipart chunk through the backend into object storage",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "files"
+                ],
+                "summary": "Upload multipart chunk",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Multipart upload id",
+                        "name": "upload_id",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Final object key",
+                        "name": "key",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Part number",
+                        "name": "part_number",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "Multipart chunk payload",
+                        "name": "part",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.MultipartUploadPartResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/me": {
             "get": {
                 "security": [
@@ -527,6 +777,106 @@
                     "items": {
                         "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.UploadedFileInfo"
                     }
+                }
+            }
+        },
+        "github_com_abhishek_pen-drive_backend_internal_api_dto.MultipartCompletedPart": {
+            "type": "object",
+            "properties": {
+                "etag": {
+                    "type": "string",
+                    "example": "\"etag-value\""
+                },
+                "part_number": {
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "github_com_abhishek_pen-drive_backend_internal_api_dto.MultipartUploadAbortRequest": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "type": "string",
+                    "example": "uploads/videos/video.mp4"
+                },
+                "upload_id": {
+                    "type": "string",
+                    "example": "upload-id"
+                }
+            }
+        },
+        "github_com_abhishek_pen-drive_backend_internal_api_dto.MultipartUploadCompleteRequest": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "type": "string",
+                    "example": "uploads/videos/video.mp4"
+                },
+                "parts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.MultipartCompletedPart"
+                    }
+                },
+                "upload_id": {
+                    "type": "string",
+                    "example": "upload-id"
+                }
+            }
+        },
+        "github_com_abhishek_pen-drive_backend_internal_api_dto.MultipartUploadInitiateRequest": {
+            "type": "object",
+            "properties": {
+                "content_type": {
+                    "type": "string",
+                    "example": "video/mp4"
+                },
+                "filename": {
+                    "type": "string",
+                    "example": "video.mp4"
+                },
+                "path": {
+                    "type": "string",
+                    "example": "uploads/videos"
+                },
+                "size": {
+                    "type": "integer",
+                    "example": 7340032
+                }
+            }
+        },
+        "github_com_abhishek_pen-drive_backend_internal_api_dto.MultipartUploadInitiateResponse": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "type": "string",
+                    "example": "uploads/videos/video.mp4"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "video.mp4"
+                },
+                "part_size": {
+                    "type": "integer",
+                    "example": 5242880
+                },
+                "upload_id": {
+                    "type": "string",
+                    "example": "upload-id"
+                }
+            }
+        },
+        "github_com_abhishek_pen-drive_backend_internal_api_dto.MultipartUploadPartResponse": {
+            "type": "object",
+            "properties": {
+                "etag": {
+                    "type": "string",
+                    "example": "\"etag-value\""
+                },
+                "part_number": {
+                    "type": "integer",
+                    "example": 1
                 }
             }
         },

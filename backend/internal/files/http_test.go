@@ -170,6 +170,90 @@ func TestUploadFolderHandlerReturnsCreated(t *testing.T) {
 	}
 }
 
+func TestInitiateMultipartUploadHandlerReturnsCreated(t *testing.T) {
+	t.Parallel()
+
+	gin.SetMode(gin.TestMode)
+	service := NewService(&stubStorageClient{})
+	handler := NewHandler(service)
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set("auth.user_id", "user-123")
+		c.Next()
+	})
+	router.POST("/upload-multipart/initiate", handler.InitiateMultipartUpload)
+
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/upload-multipart/initiate",
+		strings.NewReader(`{"filename":"video.mp4","path":"clips","content_type":"video/mp4","size":7340032}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", response.Code)
+	}
+	if !strings.Contains(response.Body.String(), `"upload_id":"upload-123"`) {
+		t.Fatalf("expected upload id in response, got %s", response.Body.String())
+	}
+}
+
+func TestUploadMultipartPartHandlerReturnsETag(t *testing.T) {
+	t.Parallel()
+
+	gin.SetMode(gin.TestMode)
+	service := NewService(&stubStorageClient{})
+	handler := NewHandler(service)
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set("auth.user_id", "user-123")
+		c.Next()
+	})
+	router.POST("/upload-multipart/part", handler.UploadMultipartPart)
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	if err := writer.WriteField("upload_id", "upload-123"); err != nil {
+		t.Fatalf("failed to write upload_id field: %v", err)
+	}
+	if err := writer.WriteField("key", "clips/video.mp4"); err != nil {
+		t.Fatalf("failed to write key field: %v", err)
+	}
+	if err := writer.WriteField("part_number", "1"); err != nil {
+		t.Fatalf("failed to write part_number field: %v", err)
+	}
+
+	partHeader := make(textproto.MIMEHeader)
+	partHeader.Set("Content-Disposition", `form-data; name="part"; filename="chunk.bin"`)
+	partHeader.Set("Content-Type", "application/octet-stream")
+	part, err := writer.CreatePart(partHeader)
+	if err != nil {
+		t.Fatalf("failed to create multipart part: %v", err)
+	}
+	if _, err := io.WriteString(part, "chunk"); err != nil {
+		t.Fatalf("failed to write chunk payload: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("failed to close writer: %v", err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/upload-multipart/part", body)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", response.Code)
+	}
+	if !strings.Contains(response.Body.String(), `"etag":"\"etag-part\""`) {
+		t.Fatalf("expected etag in response, got %s", response.Body.String())
+	}
+}
+
 type uploadRequest struct {
 	filename    string
 	content     string

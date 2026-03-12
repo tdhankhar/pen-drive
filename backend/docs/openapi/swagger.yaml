@@ -85,6 +85,76 @@ definitions:
           $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.UploadedFileInfo'
         type: array
     type: object
+  github_com_abhishek_pen-drive_backend_internal_api_dto.MultipartCompletedPart:
+    properties:
+      etag:
+        example: '"etag-value"'
+        type: string
+      part_number:
+        example: 1
+        type: integer
+    type: object
+  github_com_abhishek_pen-drive_backend_internal_api_dto.MultipartUploadAbortRequest:
+    properties:
+      key:
+        example: uploads/videos/video.mp4
+        type: string
+      upload_id:
+        example: upload-id
+        type: string
+    type: object
+  github_com_abhishek_pen-drive_backend_internal_api_dto.MultipartUploadCompleteRequest:
+    properties:
+      key:
+        example: uploads/videos/video.mp4
+        type: string
+      parts:
+        items:
+          $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.MultipartCompletedPart'
+        type: array
+      upload_id:
+        example: upload-id
+        type: string
+    type: object
+  github_com_abhishek_pen-drive_backend_internal_api_dto.MultipartUploadInitiateRequest:
+    properties:
+      content_type:
+        example: video/mp4
+        type: string
+      filename:
+        example: video.mp4
+        type: string
+      path:
+        example: uploads/videos
+        type: string
+      size:
+        example: 7340032
+        type: integer
+    type: object
+  github_com_abhishek_pen-drive_backend_internal_api_dto.MultipartUploadInitiateResponse:
+    properties:
+      key:
+        example: uploads/videos/video.mp4
+        type: string
+      name:
+        example: video.mp4
+        type: string
+      part_size:
+        example: 5242880
+        type: integer
+      upload_id:
+        example: upload-id
+        type: string
+    type: object
+  github_com_abhishek_pen-drive_backend_internal_api_dto.MultipartUploadPartResponse:
+    properties:
+      etag:
+        example: '"etag-value"'
+        type: string
+      part_number:
+        example: 1
+        type: integer
+    type: object
   github_com_abhishek_pen-drive_backend_internal_api_dto.RefreshRequest:
     properties:
       refresh_token:
@@ -359,6 +429,167 @@ paths:
       security:
       - BearerAuth: []
       summary: Upload folder
+      tags:
+      - files
+  /api/v1/files/upload-multipart/abort:
+    post:
+      consumes:
+      - application/json
+      description: Abort an in-flight multipart upload and clean up uploaded parts
+      parameters:
+      - description: Multipart abort payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.MultipartUploadAbortRequest'
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Abort multipart upload
+      tags:
+      - files
+  /api/v1/files/upload-multipart/complete:
+    post:
+      consumes:
+      - application/json
+      description: Complete an S3 multipart upload after all parts are uploaded
+      parameters:
+      - description: Multipart complete payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.MultipartUploadCompleteRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.FileUploadResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Complete multipart upload
+      tags:
+      - files
+  /api/v1/files/upload-multipart/initiate:
+    post:
+      consumes:
+      - application/json
+      description: Start an S3 multipart upload for a file larger than 5 MB via the
+        backend
+      parameters:
+      - description: Multipart upload payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.MultipartUploadInitiateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.MultipartUploadInitiateResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Initiate multipart upload
+      tags:
+      - files
+  /api/v1/files/upload-multipart/part:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload one multipart chunk through the backend into object storage
+      parameters:
+      - description: Multipart upload id
+        in: formData
+        name: upload_id
+        required: true
+        type: string
+      - description: Final object key
+        in: formData
+        name: key
+        required: true
+        type: string
+      - description: Part number
+        in: formData
+        name: part_number
+        required: true
+        type: integer
+      - description: Multipart chunk payload
+        in: formData
+        name: part
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.MultipartUploadPartResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Upload multipart chunk
       tags:
       - files
   /api/v1/me:

@@ -21,6 +21,8 @@ var (
 	ErrDuplicateBatchKey  = errors.New("duplicate target key in batch")
 )
 
+const multipartPartSize int64 = 5 * 1024 * 1024
+
 type Service struct {
 	storage storageClient
 }
@@ -32,9 +34,20 @@ type UploadResult struct {
 	UploadedAt string
 }
 
+type MultipartUploadSession struct {
+	UploadID string
+	Key      string
+	Name     string
+	PartSize int64
+}
+
 type storageClient interface {
 	ListPath(ctx context.Context, input storage.ListPathInput) (storage.ListPathResult, error)
 	PutObject(ctx context.Context, input storage.PutObjectInput) (storage.PutObjectResult, error)
+	StartMultipartUpload(ctx context.Context, input storage.StartMultipartUploadInput) (storage.StartMultipartUploadResult, error)
+	UploadPart(ctx context.Context, input storage.UploadPartInput) (storage.UploadPartResult, error)
+	CompleteMultipartUpload(ctx context.Context, input storage.CompleteMultipartUploadInput) (storage.PutObjectResult, error)
+	AbortMultipartUpload(ctx context.Context, input storage.AbortMultipartUploadInput) error
 }
 
 func NewService(storageClient storageClient) *Service {
@@ -253,6 +266,132 @@ func buildFinalObjectKey(destinationPath, relativePath string) string {
 		return relativePath
 	}
 	return fmt.Sprintf("%s/%s", destinationPath, relativePath)
+}
+
+func (s *Service) InitiateMultipartUpload(
+	ctx context.Context,
+	userID string,
+	destinationPath string,
+	filename string,
+	contentType string,
+) (MultipartUploadSession, error) {
+	normalizedPath, err := validateDestinationPath(destinationPath)
+	if err != nil {
+		return MultipartUploadSession{}, fmt.Errorf("%w: invalid destination path: %v", ErrInvalidUploadInput, err)
+	}
+
+	sanitizedFilename, err := SanitizeFilename(filename)
+	if err != nil {
+		return MultipartUploadSession{}, fmt.Errorf("%w: invalid filename: %v", ErrInvalidUploadInput, err)
+	}
+
+	finalKey := sanitizedFilename.Stored
+	if normalizedPath != "" {
+		finalKey = fmt.Sprintf("%s/%s", normalizedPath, sanitizedFilename.Stored)
+	}
+
+	uploadedAt := time.Now().UTC().Format(time.RFC3339)
+	result, err := s.storage.StartMultipartUpload(ctx, storage.StartMultipartUploadInput{
+		Bucket:      userID,
+		Key:         finalKey,
+		ContentType: contentType,
+		Metadata: map[string]string{
+			"original-filename":   sanitizedFilename.Original,
+			"stored-filename":     sanitizedFilename.Stored,
+			"uploaded-by-user-id": userID,
+			"uploaded-at":         uploadedAt,
+		},
+	})
+	if err != nil {
+		if errors.Is(err, storage.ErrObjectAlreadyExists) {
+			return MultipartUploadSession{}, fmt.Errorf("%w: %s", storage.ErrObjectAlreadyExists, finalKey)
+		}
+		return MultipartUploadSession{}, err
+	}
+
+	return MultipartUploadSession{
+		UploadID: result.UploadID,
+		Key:      result.Key,
+		Name:     sanitizedFilename.Stored,
+		PartSize: multipartPartSize,
+	}, nil
+}
+
+func (s *Service) UploadMultipartPart(
+	ctx context.Context,
+	userID string,
+	key string,
+	uploadID string,
+	partNumber int32,
+	body io.Reader,
+	size int64,
+) (storage.UploadPartResult, error) {
+	if strings.TrimSpace(key) == "" || strings.TrimSpace(uploadID) == "" {
+		return storage.UploadPartResult{}, fmt.Errorf("%w: key and upload_id are required", ErrInvalidUploadInput)
+	}
+	if partNumber <= 0 {
+		return storage.UploadPartResult{}, fmt.Errorf("%w: part_number must be greater than zero", ErrInvalidUploadInput)
+	}
+	if size <= 0 {
+		return storage.UploadPartResult{}, fmt.Errorf("%w: multipart part cannot be empty", ErrInvalidUploadInput)
+	}
+
+	return s.storage.UploadPart(ctx, storage.UploadPartInput{
+		Bucket:     userID,
+		Key:        key,
+		UploadID:   uploadID,
+		PartNumber: partNumber,
+		Body:       body,
+		Size:       size,
+	})
+}
+
+func (s *Service) CompleteMultipartUpload(
+	ctx context.Context,
+	userID string,
+	key string,
+	uploadID string,
+	parts []storage.CompletedPart,
+) (UploadResult, error) {
+	if strings.TrimSpace(key) == "" || strings.TrimSpace(uploadID) == "" {
+		return UploadResult{}, fmt.Errorf("%w: key and upload_id are required", ErrInvalidUploadInput)
+	}
+	if len(parts) == 0 {
+		return UploadResult{}, fmt.Errorf("%w: at least one uploaded part is required", ErrInvalidUploadInput)
+	}
+
+	sort.Slice(parts, func(i, j int) bool {
+		return parts[i].PartNumber < parts[j].PartNumber
+	})
+
+	_, err := s.storage.CompleteMultipartUpload(ctx, storage.CompleteMultipartUploadInput{
+		Bucket:   userID,
+		Key:      key,
+		UploadID: uploadID,
+		Parts:    parts,
+	})
+	if err != nil {
+		return UploadResult{}, err
+	}
+
+	uploadedAt := time.Now().UTC().Format(time.RFC3339)
+	return UploadResult{
+		Name:       path.Base(key),
+		Path:       key,
+		UploadedAt: uploadedAt,
+	}, nil
+}
+
+func (s *Service) AbortMultipartUpload(ctx context.Context, userID string, key string, uploadID string) error {
+	if strings.TrimSpace(key) == "" || strings.TrimSpace(uploadID) == "" {
+		return fmt.Errorf("%w: key and upload_id are required", ErrInvalidUploadInput)
+	}
+
+	return s.storage.AbortMultipartUpload(ctx, storage.AbortMultipartUploadInput{
+		Bucket:   userID,
+		Key:      key,
+		UploadID: uploadID,
+	})
 }
 
 // UploadFolder handles batch folder uploads with relative path preservation
