@@ -1,6 +1,6 @@
 APP_NAME=pen-drive
 
-.PHONY: backend-run backend-build backend-test backend-lint backend-tidy backend-dev-up backend-dev-down
+.PHONY: backend-run backend-build backend-test backend-lint backend-tidy backend-dev-up backend-dev-down backend-openapi
 
 backend-run:
 	cd backend && go run ./cmd/api
@@ -17,6 +17,9 @@ backend-lint:
 
 backend-tidy:
 	cd backend && go mod tidy
+
+backend-openapi:
+	cd backend && go run github.com/swaggo/swag/cmd/swag@v1.16.4 init -g ./cmd/api/main.go -o ./docs/openapi --parseDependency --parseInternal
 
 backend-dev-up:
 	docker-compose up -d postgres

@@ -1,0 +1,194 @@
+basePath: /
+definitions:
+  github_com_abhishek_pen-drive_backend_internal_api_dto.AuthResponse:
+    properties:
+      tokens:
+        $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.TokenPair'
+      user:
+        $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.AuthenticatedUser'
+    type: object
+  github_com_abhishek_pen-drive_backend_internal_api_dto.AuthenticatedUser:
+    properties:
+      email:
+        example: user@example.com
+        type: string
+      id:
+        example: 01kki6wb2vqqw4x63mw9bjw6y4
+        type: string
+    type: object
+  github_com_abhishek_pen-drive_backend_internal_api_dto.CredentialsRequest:
+    properties:
+      email:
+        example: user@example.com
+        type: string
+      password:
+        example: Password123!
+        type: string
+    type: object
+  github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorPayload:
+    properties:
+      code:
+        example: invalid_request
+        type: string
+      message:
+        example: request body is invalid
+        type: string
+    type: object
+  github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse:
+    properties:
+      error:
+        $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorPayload'
+    type: object
+  github_com_abhishek_pen-drive_backend_internal_api_dto.RefreshRequest:
+    properties:
+      refresh_token:
+        example: refresh-token
+        type: string
+    type: object
+  github_com_abhishek_pen-drive_backend_internal_api_dto.TokenPair:
+    properties:
+      access_token:
+        example: eyJhbGciOiJIUzI1NiJ9
+        type: string
+      access_token_expires_at:
+        example: "2026-03-12T16:00:00Z"
+        type: string
+      refresh_token:
+        example: opaque-refresh-token
+        type: string
+      refresh_token_expires_at:
+        example: "2026-04-11T16:00:00Z"
+        type: string
+    type: object
+info:
+  contact: {}
+  description: pen-drive backend API
+  title: pen-drive API
+  version: 0.1.0
+paths:
+  /api/v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate a user and issue auth tokens.
+      parameters:
+      - description: Login payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.CredentialsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.AuthResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+      summary: Log in
+      tags:
+      - auth
+  /api/v1/auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Rotate a refresh token and issue a new token pair.
+      parameters:
+      - description: Refresh payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.RefreshRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.AuthResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+      summary: Refresh tokens
+      tags:
+      - auth
+  /api/v1/auth/signup:
+    post:
+      consumes:
+      - application/json
+      description: Create a user, provision a bucket, and issue auth tokens.
+      parameters:
+      - description: Signup payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.CredentialsRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.AuthResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+      summary: Sign up
+      tags:
+      - auth
+  /api/v1/me:
+    get:
+      description: Return the authenticated user from the access token.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.AuthenticatedUser'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Current user
+      tags:
+      - auth
+schemes:
+- http
+- https
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

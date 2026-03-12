@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/abhishek/pen-drive/backend/internal/api/dto"
 	"github.com/gin-gonic/gin"
 )
 
@@ -16,22 +17,19 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
-type credentialsRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
-type refreshRequest struct {
-	RefreshToken string `json:"refresh_token"`
-}
-
-type authResponse struct {
-	User   AuthenticatedUser `json:"user"`
-	Tokens TokenPair         `json:"tokens"`
-}
-
+// Signup godoc
+// @Summary Sign up
+// @Description Create a user, provision a bucket, and issue auth tokens.
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param payload body dto.CredentialsRequest true "Signup payload"
+// @Success 201 {object} dto.AuthResponse
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 500 {object} dto.ErrorResponse
+// @Router /api/v1/auth/signup [post]
 func (h *Handler) Signup(c *gin.Context) {
-	var req credentialsRequest
+	var req dto.CredentialsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		respondError(c, http.StatusBadRequest, "invalid_request", "request body is invalid")
 		return
@@ -43,11 +41,23 @@ func (h *Handler) Signup(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, authResponse{User: user, Tokens: tokens})
+	c.JSON(http.StatusCreated, toAuthResponse(user, tokens))
 }
 
+// Login godoc
+// @Summary Log in
+// @Description Authenticate a user and issue auth tokens.
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param payload body dto.CredentialsRequest true "Login payload"
+// @Success 200 {object} dto.AuthResponse
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 401 {object} dto.ErrorResponse
+// @Failure 500 {object} dto.ErrorResponse
+// @Router /api/v1/auth/login [post]
 func (h *Handler) Login(c *gin.Context) {
-	var req credentialsRequest
+	var req dto.CredentialsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		respondError(c, http.StatusBadRequest, "invalid_request", "request body is invalid")
 		return
@@ -65,11 +75,23 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, authResponse{User: user, Tokens: tokens})
+	c.JSON(http.StatusOK, toAuthResponse(user, tokens))
 }
 
+// Refresh godoc
+// @Summary Refresh tokens
+// @Description Rotate a refresh token and issue a new token pair.
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param payload body dto.RefreshRequest true "Refresh payload"
+// @Success 200 {object} dto.AuthResponse
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 401 {object} dto.ErrorResponse
+// @Failure 500 {object} dto.ErrorResponse
+// @Router /api/v1/auth/refresh [post]
 func (h *Handler) Refresh(c *gin.Context) {
-	var req refreshRequest
+	var req dto.RefreshRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		respondError(c, http.StatusBadRequest, "invalid_request", "request body is invalid")
 		return
@@ -87,14 +109,23 @@ func (h *Handler) Refresh(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, authResponse{User: user, Tokens: tokens})
+	c.JSON(http.StatusOK, toAuthResponse(user, tokens))
 }
 
+// Me godoc
+// @Summary Current user
+// @Description Return the authenticated user from the access token.
+// @Tags auth
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} dto.AuthenticatedUser
+// @Failure 401 {object} dto.ErrorResponse
+// @Router /api/v1/me [get]
 func (h *Handler) Me(c *gin.Context) {
 	userID, _ := c.Get(userIDContextKey)
 	email, _ := c.Get(userEmailContextKey)
 
-	c.JSON(http.StatusOK, AuthenticatedUser{
+	c.JSON(http.StatusOK, dto.AuthenticatedUser{
 		ID:    userID.(string),
 		Email: email.(string),
 	})
@@ -151,10 +182,25 @@ const (
 )
 
 func respondError(c *gin.Context, status int, code, message string) {
-	c.JSON(status, gin.H{
-		"error": gin.H{
-			"code":    code,
-			"message": message,
+	c.JSON(status, dto.ErrorResponse{
+		Error: dto.ErrorPayload{
+			Code:    code,
+			Message: message,
 		},
 	})
+}
+
+func toAuthResponse(user AuthenticatedUser, tokens TokenPair) dto.AuthResponse {
+	return dto.AuthResponse{
+		User: dto.AuthenticatedUser{
+			ID:    user.ID,
+			Email: user.Email,
+		},
+		Tokens: dto.TokenPair{
+			AccessToken:           tokens.AccessToken,
+			AccessTokenExpiresAt:  tokens.AccessTokenExpiresAt.UTC().Format(http.TimeFormat),
+			RefreshToken:          tokens.RefreshToken,
+			RefreshTokenExpiresAt: tokens.RefreshTokenExpiresAt.UTC().Format(http.TimeFormat),
+		},
+	}
 }

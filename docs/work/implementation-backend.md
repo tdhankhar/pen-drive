@@ -6,6 +6,38 @@ This file tracks backend-only implementation progress, verification evidence, an
 
 ## Checkpoints
 
+### Checkpoint 4: Backend DTO contract and OpenAPI generation
+
+Goal:
+
+- move API contracts into explicit Go DTO structs
+- annotate handlers for OpenAPI generation
+- generate OpenAPI artifacts from backend code
+- serve Swagger UI from the backend
+
+Verification steps:
+
+- `make backend-tidy`
+- `make backend-build`
+- `make backend-openapi`
+- `go test ./...`
+- start backend
+- call `GET /swagger/doc.json`
+
+Verification result:
+
+- passed on 2026-03-12
+- `make backend-tidy`: passed
+- `make backend-build`: passed
+- `make backend-openapi`: passed and generated `docs/openapi/docs.go`, `swagger.json`, and `swagger.yaml`
+- `go test ./...`: passed
+- backend served `GET /swagger/doc.json`
+- verified spec metadata and DTO-backed auth routes in generated document
+
+Commit:
+
+- pending
+
 ### Checkpoint 1: Backend foundation boot
 
 Goal:

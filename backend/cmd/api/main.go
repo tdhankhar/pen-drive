@@ -1,3 +1,11 @@
+// @title pen-drive API
+// @version 0.1.0
+// @description pen-drive backend API
+// @BasePath /
+// @schemes http https
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
 package main
 
 import (

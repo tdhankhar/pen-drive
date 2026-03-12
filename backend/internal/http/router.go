@@ -7,11 +7,17 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/abhishek/pen-drive/backend/internal/api/dto"
 	"github.com/abhishek/pen-drive/backend/internal/auth"
 	"github.com/abhishek/pen-drive/backend/internal/config"
 	"github.com/abhishek/pen-drive/backend/internal/storage"
 	"github.com/abhishek/pen-drive/backend/internal/users"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	swaggerfiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
+
+	_ "github.com/abhishek/pen-drive/backend/docs/openapi"
 )
 
 func NewRouter(logger *slog.Logger, dbConn *sql.DB, storageClient *storage.Client, jwtConfig config.JWTConfig) *gin.Engine {
@@ -20,18 +26,37 @@ func NewRouter(logger *slog.Logger, dbConn *sql.DB, storageClient *storage.Clien
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(RequestLogger(logger))
+	router.Use(cors.Default())
+
+	// Swagger UI is served directly from the generated backend contract.
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
 
 	userRepo := users.NewRepository(dbConn)
 	authService := auth.NewService(dbConn, userRepo, storageClient, jwtConfig)
 	authHandler := auth.NewHandler(authService)
 
+	// Healthz godoc
+	// @Summary Liveness
+	// @Description Basic liveness probe.
+	// @Tags system
+	// @Produce json
+	// @Success 200 {object} dto.HealthResponse
+	// @Router /healthz [get]
 	router.GET("/healthz", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"status": "ok",
-			"time":   time.Now().UTC().Format(time.RFC3339),
+		c.JSON(http.StatusOK, dto.HealthResponse{
+			Status: "ok",
+			Time:   time.Now().UTC().Format(time.RFC3339),
 		})
 	})
 
+	// Readyz godoc
+	// @Summary Readiness
+	// @Description Validate database and object storage connectivity.
+	// @Tags system
+	// @Produce json
+	// @Success 200 {object} dto.HealthResponse
+	// @Failure 503 {object} dto.ErrorResponse
+	// @Router /readyz [get]
 	router.GET("/readyz", func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
 		defer cancel()
@@ -46,9 +71,9 @@ func NewRouter(logger *slog.Logger, dbConn *sql.DB, storageClient *storage.Clien
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
-			"status": "ready",
-			"time":   time.Now().UTC().Format(time.RFC3339),
+		c.JSON(http.StatusOK, dto.HealthResponse{
+			Status: "ready",
+			Time:   time.Now().UTC().Format(time.RFC3339),
 		})
 	})
 
