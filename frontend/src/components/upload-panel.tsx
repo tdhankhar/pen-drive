@@ -531,7 +531,7 @@ async function uploadViaSingleRequest(
   const { data, error, response } = await postApiV1FilesUpload({
     client: apiClient,
     body,
-    ...authHeaders(runtime.accessToken),
+    headers: authHeaders(runtime.accessToken),
   });
   if (error) throw new Error(getErrorMessage(error, response.status));
 
@@ -634,7 +634,7 @@ async function abortMultipartUpload(
       key: multipart.key,
       upload_id: multipart.upload_id,
     },
-    ...authHeaders(runtime.accessToken),
+    headers: authHeaders(runtime.accessToken),
   });
 }
 
@@ -657,7 +657,7 @@ async function previewBatchConflicts(
       path: runtime.currentPath,
       relative_paths: relativePaths,
     },
-    ...authHeaders(runtime.accessToken),
+    headers: authHeaders(runtime.accessToken),
   });
   if (error) throw new Error(getErrorMessage(error, response.status));
 

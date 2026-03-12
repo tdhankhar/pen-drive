@@ -9,7 +9,7 @@ function ProtectedLayout() {
   const auth = useAuth();
 
   if (auth.isLoading) {
-    return <div className="screen-state">Restoring session...</div>;
+    return <div className="grid min-h-screen place-items-center text-muted-foreground">Restoring session...</div>;
   }
 
   if (!auth.session) {
@@ -23,7 +23,7 @@ function PublicLayout() {
   const auth = useAuth();
 
   if (auth.isLoading) {
-    return <div className="screen-state">Restoring session...</div>;
+    return <div className="grid min-h-screen place-items-center text-muted-foreground">Restoring session...</div>;
   }
 
   if (auth.session) {
