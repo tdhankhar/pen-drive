@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "api:generate": "orval --config orval.config.ts",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint . && eslint .",
@@ -24,6 +25,7 @@
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.4.0",
     "oxlint": "^1.29.0",
+    "orval": "^7.12.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.56.1",
     "vite": "^8.0.0"

@@ -31,7 +31,7 @@ Verification result:
 
 Commit:
 
-- pending
+- `95d3a7c feat: scaffold frontend app`
 
 ### Checkpoint 2: Generated API client from backend OpenAPI
 
@@ -43,12 +43,17 @@ Goal:
 Verification steps:
 
 - `make backend-openapi`
-- run frontend API generation
+- `cd frontend && npm run api:generate`
 - `make frontend-build`
 
 Verification result:
 
-- pending
+- passed on 2026-03-12
+- `make backend-openapi`: passed
+- `cd frontend && npm run api:generate`: passed
+- `make frontend-lint`: passed
+- `make frontend-build`: passed
+- generated client and model files are now sourced from `../backend/docs/openapi/swagger.json`
 
 Commit:
 
