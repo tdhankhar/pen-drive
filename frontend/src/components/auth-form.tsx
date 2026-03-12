@@ -22,7 +22,7 @@ export function AuthForm({
 
   return (
     <form
-      className="auth-card"
+      className="grid w-full max-w-[28rem] gap-5 rounded-3xl border border-[rgba(22,138,173,0.16)] bg-white/[0.88] p-8 shadow-[0_20px_50px_rgba(8,43,54,0.08)] backdrop-blur-[14px]"
       onSubmit={async (event) => {
         event.preventDefault();
         setError(null);
@@ -39,7 +39,7 @@ export function AuthForm({
         }
       }}
     >
-      <div className="auth-copy">
+      <div className="grid gap-[0.6rem]">
         <p className="eyebrow">pen-drive</p>
         <h1>{title}</h1>
         <p>{subtitle}</p>

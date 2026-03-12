@@ -6,30 +6,6 @@
   font-size: 1.05rem;
 }
 
-.auth-card {
-  width: min(100%, 28rem);
-  display: grid;
-  gap: 1.2rem;
-  padding: 2rem;
-  border: 1px solid rgba(22, 138, 173, 0.16);
-  border-radius: 1.5rem;
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 20px 50px rgba(8, 43, 54, 0.08);
-  backdrop-filter: blur(14px);
-}
-
-.auth-copy {
-  display: grid;
-  gap: 0.6rem;
-}
-
-.auth-copy h1 {
-  margin: 0;
-  font-family: var(--font-display);
-  line-height: 0.95;
-  font-size: clamp(2.3rem, 4vw, 3.4rem);
-}
-
 .field {
   display: grid;
   gap: 0.45rem;
