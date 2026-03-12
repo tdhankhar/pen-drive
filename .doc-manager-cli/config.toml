@@ -1,0 +1,7 @@
+docs_dir = "docs"
+extensions = ["md"]
+
+# format = "%Y-%m-%d-%H-%M-%S"
+# allow = []
+# deny = []
+# depth = 1
