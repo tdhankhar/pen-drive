@@ -12,11 +12,13 @@
   },
   "dependencies": {
     "@hey-api/client-fetch": "^0.13.1",
+    "@tailwindcss/vite": "^4.2.1",
     "@uppy/core": "^5.2.0",
     "@uppy/react": "^5.2.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "react-router-dom": "^7.9.5"
+    "react-router-dom": "^7.9.5",
+    "tailwindcss": "^4.2.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
