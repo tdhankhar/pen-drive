@@ -58,8 +58,6 @@ type UploadMeta = {
 
 type UploadBody = Record<string, never>;
 
-type UploadMode = "file" | "folder";
-
 type UploadRuntime = {
   currentPath: string;
 };
@@ -67,7 +65,6 @@ type UploadRuntime = {
 type ConflictDialogState = {
   items: GithubComAbhishekPenDriveBackendInternalApiDtoDuplicatePreviewItem[];
   impactedPaths: string[];
-  mode: UploadMode;
 };
 
 type UploadConflictPolicy = Exclude<
@@ -89,26 +86,16 @@ export function UploadPanel({
 }: UploadPanelProps) {
   const runtimeRef = useRef<UploadRuntime>({ currentPath });
   const folderInputRef = useRef<HTMLInputElement | null>(null);
-  const fileUppyConfiguredRef = useRef(false);
-  const folderUppyConfiguredRef = useRef(false);
+  const uppyConfiguredRef = useRef(false);
   const pendingConflictResolverRef = useRef<
     ((policy: UploadConflictPolicy | null) => void) | null
   >(null);
-  const [fileMessage, setFileMessage] = useState<string | null>(null);
-  const [fileError, setFileError] = useState<string | null>(null);
-  const [folderMessage, setFolderMessage] = useState<string | null>(null);
-  const [folderError, setFolderError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [conflictDialog, setConflictDialog] = useState<ConflictDialogState | null>(
     null,
   );
-  const [fileUppy] = useState(
-    () =>
-      new Uppy<UploadMeta, UploadBody>({
-        autoProceed: false,
-        allowMultipleUploadBatches: true,
-      }),
-  );
-  const [folderUppy] = useState(
+  const [uppy] = useState(
     () =>
       new Uppy<UploadMeta, UploadBody>({
         autoProceed: false,
@@ -140,55 +127,33 @@ export function UploadPanel({
       currentPath,
     });
 
-    if (!fileUppyConfiguredRef.current) {
+    if (!uppyConfiguredRef.current) {
       configureUppy({
-        mode: "file",
         requestConflictPolicy: requestConflictPolicy,
-        setError: setFileError,
-        uppy: fileUppy,
+        setError,
+        uppy,
         runtimeRef,
       });
-      fileUppyConfiguredRef.current = true;
-    }
-
-    if (!folderUppyConfiguredRef.current) {
-      configureUppy({
-        mode: "folder",
-        requestConflictPolicy: requestConflictPolicy,
-        setError: setFolderError,
-        uppy: folderUppy,
-        runtimeRef,
-      });
-      folderUppyConfiguredRef.current = true;
+      uppyConfiguredRef.current = true;
     }
 
     return () => {
-      fileUppy.destroy();
-      folderUppy.destroy();
+      uppy.destroy();
     };
-  }, [fileUppy, folderUppy]);
+  }, [currentPath, setError, uppy]);
 
   useEffect(() => {
-    const detachFileHandlers = attachCompletionHandlers({
-      label: "file",
+    const detachHandlers = attachCompletionHandlers({
       onUploaded,
-      setError: setFileError,
-      setMessage: setFileMessage,
-      uppy: fileUppy,
-    });
-    const detachFolderHandlers = attachCompletionHandlers({
-      label: "folder item",
-      onUploaded,
-      setError: setFolderError,
-      setMessage: setFolderMessage,
-      uppy: folderUppy,
+      setError,
+      setMessage,
+      uppy,
     });
 
     return () => {
-      detachFileHandlers();
-      detachFolderHandlers();
+      detachHandlers();
     };
-  }, [fileUppy, folderUppy, onUploaded]);
+  }, [onUploaded, uppy]);
 
   function handleFolderSelection(event: ChangeEvent<HTMLInputElement>) {
     const files = event.currentTarget.files;
@@ -196,8 +161,8 @@ export function UploadPanel({
       return;
     }
 
-    setFolderError(null);
-    setFolderMessage(null);
+    setError(null);
+    setMessage(null);
 
     debugUpload("folder-selection", {
       count: files.length,
@@ -213,7 +178,7 @@ export function UploadPanel({
         rawRelativePath: file.webkitRelativePath || file.name,
       });
       try {
-        folderUppy.addFile({
+        uppy.addFile({
           name: file.name,
           type: file.type,
           data: file,
@@ -223,7 +188,7 @@ export function UploadPanel({
           },
         });
       } catch (error) {
-        setFolderError(
+        setError(
           error instanceof Error ? error.message : "failed to queue folder file",
         );
       }
@@ -234,63 +199,24 @@ export function UploadPanel({
 
   return (
     <>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <UploadCard
-          description="Drag files onto the target or browse from this device. Files above 5 MB switch to multipart upload automatically."
-          error={fileError}
-          message={fileMessage}
-          title="Quick file upload"
-          uppy={fileUppy}
-        />
-        <Card className="flex flex-col gap-2">
-          <CardHeader>
-            <CardTitle>Preserve nested paths</CardTitle>
-            <CardDescription>
-              Pick a folder from disk to preserve nested paths under{" "}
-              <code>{currentPath || "root"}</code>. Files above 5 MB switch to
-              multipart upload automatically.
-            </CardDescription>
-          </CardHeader>
-          <div className="flex gap-2 px-6">
-            <Button
-              variant="outline"
-              onClick={() => folderInputRef.current?.click()}
-              type="button"
-            >
-              Pick folder
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => folderUppy.cancelAll()}
-              type="button"
-            >
-              Clear queue
-            </Button>
-          </div>
-          <input
-            className="sr-only"
-            multiple
-            onChange={handleFolderSelection}
-            ref={folderInputRef}
-            type="file"
-            {...({
-              directory: "",
-              webkitdirectory: "",
-            } as Record<string, string>)}
-          />
-          <UppySurface
-            description="Drop files here or pick a folder using the button above."
-            mode="folder"
-            uppy={folderUppy}
-          />
-          {folderMessage ? (
-            <p className="text-sm text-muted-foreground px-6 pb-2">{folderMessage}</p>
-          ) : null}
-          {folderError ? (
-            <p className="text-sm text-muted-foreground text-destructive px-6 pb-2">{folderError}</p>
-          ) : null}
-        </Card>
-      </div>
+      <UploadCard
+        currentPath={currentPath}
+        error={error}
+        message={message}
+        onPickFolder={() => folderInputRef.current?.click()}
+        uppy={uppy}
+      />
+      <input
+        className="sr-only"
+        multiple
+        onChange={handleFolderSelection}
+        ref={folderInputRef}
+        type="file"
+        {...({
+          directory: "",
+          webkitdirectory: "",
+        } as Record<string, string>)}
+      />
       {conflictDialog ? (
         <ConflictPreviewDialog
           conflictDialog={conflictDialog}
@@ -303,25 +229,32 @@ export function UploadPanel({
 }
 
 function UploadCard({
-  description,
+  currentPath,
   error,
   message,
-  title,
+  onPickFolder,
   uppy,
 }: {
-  description: string;
+  currentPath: string;
   error: string | null;
   message: string | null;
-  title: string;
+  onPickFolder: () => void;
   uppy: Uppy<UploadMeta, UploadBody>;
 }) {
   return (
     <Card className="flex flex-col gap-2">
       <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
+        <CardTitle>Upload files or folders</CardTitle>
+        <CardDescription>
+          Drop files onto the target, click the surface to browse files, or pick a
+          folder to preserve nested paths under <code>{currentPath || "root"}</code>.
+          Files above 5 MB switch to multipart upload automatically.
+        </CardDescription>
       </CardHeader>
-      <div className="flex gap-2 px-6">
+      <div className="flex flex-wrap gap-2 px-6">
+        <Button variant="outline" onClick={onPickFolder} type="button">
+          Pick folder
+        </Button>
         <Button
           variant="outline"
           onClick={() => uppy.cancelAll()}
@@ -331,8 +264,7 @@ function UploadCard({
         </Button>
       </div>
       <UppySurface
-        description="Drag files here or click the surface to browse."
-        mode="file"
+        description="Drop files here, click to add files, or use Pick folder to keep nested paths."
         uppy={uppy}
       />
       {message ? (
@@ -347,11 +279,9 @@ function UploadCard({
 
 function UppySurface({
   description,
-  mode,
   uppy,
 }: {
   description: string;
-  mode: UploadMode;
   uppy: Uppy<UploadMeta, UploadBody>;
 }) {
   const files = useUppyState(uppy, (state) => Object.values(state.files)) as Array<
@@ -381,8 +311,7 @@ function UppySurface({
             <Progress value={aggregateProgress} />
             <div className="rounded-md border divide-y">
               {files.map((file) => {
-                const label =
-                  mode === "folder" ? file.meta.relativePath || file.name : file.name;
+                const label = file.meta.relativePath || file.name;
                 const percentage =
                   typeof file.progress?.percentage === "number"
                     ? file.progress.percentage
@@ -392,7 +321,12 @@ function UppySurface({
                   <div className="space-y-2 p-3" key={file.id}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">{label}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="truncate text-sm font-medium">{label}</p>
+                          <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                            {isFolderUpload(file) ? "folder" : "file"}
+                          </span>
+                        </div>
                         <p className="text-xs text-muted-foreground">
                           {renderFileStatus(file)}
                         </p>
@@ -417,13 +351,11 @@ function UppySurface({
 }
 
 function configureUppy({
-  mode,
   requestConflictPolicy,
   runtimeRef,
   setError,
   uppy,
 }: {
-  mode: UploadMode;
   requestConflictPolicy: (
     value: ConflictDialogState,
   ) => Promise<UploadConflictPolicy | null>;
@@ -431,28 +363,29 @@ function configureUppy({
   setError: (message: string | null) => void;
   uppy: Uppy<UploadMeta, UploadBody>;
 }) {
-  if (mode === "folder") {
-    uppy.on("file-added", (file) => {
-      const nativeFile = file.data;
-      if (!(nativeFile instanceof File)) {
-        return;
-      }
+  uppy.on("file-added", (file) => {
+    const nativeFile = file.data;
+    if (!(nativeFile instanceof File)) {
+      return;
+    }
 
-      const relativePath =
-        file.meta.relativePath ||
-        normalizeFolderRelativePath(nativeFile.webkitRelativePath) ||
-        nativeFile.name;
-      debugUpload("uppy-file-added", {
-        fileId: file.id,
-        mode,
-        name: file.name,
-        relativePath,
-      });
-      uppy.setFileMeta(file.id, {
-        relativePath,
-      });
+    const relativePath =
+      file.meta.relativePath ||
+      normalizeFolderRelativePath(nativeFile.webkitRelativePath);
+    debugUpload("uppy-file-added", {
+      fileId: file.id,
+      isFolderItem: Boolean(relativePath),
+      name: file.name,
+      relativePath: relativePath || null,
     });
-  }
+    if (!relativePath) {
+      return;
+    }
+
+    uppy.setFileMeta(file.id, {
+      relativePath,
+    });
+  });
 
   uppy.addUploader(async (fileIDs) => {
     setError(null);
@@ -461,7 +394,6 @@ function configureUppy({
       .filter((file): file is UppyFile<UploadMeta, UploadBody> => Boolean(file));
 
     debugUpload("uploader-start", {
-      mode,
       fileIDs,
       files: files.map((file) => ({
         id: file.id,
@@ -472,9 +404,8 @@ function configureUppy({
     });
 
     const runtime = runtimeRef.current;
-    const preview = await previewBatchConflicts(runtime, mode, files);
+    const preview = await previewBatchConflicts(runtime, files);
     debugUpload("preview-result", {
-      mode,
       hasConflicts: preview?.has_conflicts ?? null,
       impactedPaths: preview?.impacted_paths ?? [],
       items: preview?.items ?? [],
@@ -483,7 +414,6 @@ function configureUppy({
       ? await requestConflictPolicy({
           impactedPaths: preview.impacted_paths ?? [],
           items: preview.items ?? [],
-          mode,
         })
       : null;
 
@@ -494,67 +424,60 @@ function configureUppy({
     const normalizedPolicy =
       conflictPolicy ?? DuplicateConflictPolicy.DUPLICATE_CONFLICT_POLICY_REJECT;
 
-    if (mode === "folder") {
-      const batchFiles = files.filter((file) => !isMultipartEligible(file));
-      const multipartFiles = files.filter((file) => isMultipartEligible(file));
+    const folderBatchFiles = files.filter(
+      (file) => isFolderUpload(file) && !isMultipartEligible(file),
+    );
 
-      if (batchFiles.length > 0) {
-        try {
-          await uploadFolderBatch(
-            runtime,
-            batchFiles,
-            normalizedPolicy,
-            (progressByFile) => {
-              for (const [fileId, progress] of progressByFile.entries()) {
-                updateFileProgress(
-                  uppy,
-                  fileId,
-                  progress.bytesUploaded,
-                  progress.bytesTotal,
-                );
-              }
-            },
-          );
-
-          for (const file of batchFiles) {
-            markFileComplete(uppy, file.id);
-            const refreshed = uppy.getFile(file.id);
-            if (refreshed) {
-              uppy.emit("upload-success", refreshed, {
-                body: undefined,
-                status: 201,
-                uploadURL: undefined,
-              });
-            }
-          }
-        } catch (error) {
-          for (const file of batchFiles) {
-            const refreshed = uppy.getFile(file.id);
-            if (!refreshed) {
-              continue;
-            }
-            uppy.emit(
-              "upload-error",
-              refreshed,
-              error instanceof Error ? error : new Error("upload failed"),
-            );
-          }
-          return;
-        }
-      }
-
-      for (const file of multipartFiles) {
-        await uploadOneFile({
-          conflictPolicy: normalizedPolicy,
-          file,
+    if (folderBatchFiles.length > 0) {
+      try {
+        await uploadFolderBatch(
           runtime,
-          uppy,
-        });
+          folderBatchFiles,
+          normalizedPolicy,
+          (progressByFile) => {
+            for (const [fileId, progress] of progressByFile.entries()) {
+              updateFileProgress(
+                uppy,
+                fileId,
+                progress.bytesUploaded,
+                progress.bytesTotal,
+              );
+            }
+          },
+        );
+
+        for (const file of folderBatchFiles) {
+          markFileComplete(uppy, file.id);
+          const refreshed = uppy.getFile(file.id);
+          if (refreshed) {
+            uppy.emit("upload-success", refreshed, {
+              body: undefined,
+              status: 201,
+              uploadURL: undefined,
+            });
+          }
+        }
+      } catch (error) {
+        for (const file of folderBatchFiles) {
+          const refreshed = uppy.getFile(file.id);
+          if (!refreshed) {
+            continue;
+          }
+          uppy.emit(
+            "upload-error",
+            refreshed,
+            error instanceof Error ? error : new Error("upload failed"),
+          );
+        }
+        return;
       }
-      return;
     }
 
-    for (const file of files) {
+    const remainingFiles = files.filter(
+      (file) => !folderBatchFiles.some((batchFile) => batchFile.id === file.id),
+    );
+
+    for (const file of remainingFiles) {
       await uploadOneFile({
         conflictPolicy: normalizedPolicy,
         file,
@@ -566,13 +489,11 @@ function configureUppy({
 }
 
 function attachCompletionHandlers({
-  label,
   onUploaded,
   setError,
   setMessage,
   uppy,
 }: {
-  label: string;
   onUploaded: () => Promise<void> | void;
   setError: (message: string | null) => void;
   setMessage: (message: string | null) => void;
@@ -584,16 +505,14 @@ function attachCompletionHandlers({
 
     if (successful.length > 0) {
       await onUploaded();
-      setMessage(
-        `${successful.length} ${label}${successful.length === 1 ? "" : "s"} uploaded`,
-      );
+      setMessage(summarizeUploadResult(successful));
       for (const file of successful) {
         uppy.removeFile(file.id);
       }
     }
 
     if (failed.length > 0) {
-      setError(failed[0].error || `failed to upload ${label}`);
+      setError(failed[0].error || "failed to upload selection");
       return;
     }
 
@@ -607,11 +526,10 @@ function attachCompletionHandlers({
 }
 
 function resolveUploadTarget(
-  mode: UploadMode,
   currentPath: string,
   file: UppyFile<UploadMeta, UploadBody>,
 ) {
-  if (mode === "file") {
+  if (!isFolderUpload(file)) {
     return {
       filename: file.name,
       path: currentPath,
@@ -639,17 +557,37 @@ function isMultipartEligible(file: UppyFile<UploadMeta, UploadBody>) {
   return typeof file.size === "number" && file.size > MULTIPART_THRESHOLD_BYTES;
 }
 
+function isFolderUpload(file: UppyFile<UploadMeta, UploadBody>) {
+  return Boolean(file.meta.relativePath);
+}
+
+function summarizeUploadResult(files: UppyFile<UploadMeta, UploadBody>[]) {
+  const folderCount = files.filter((file) => isFolderUpload(file)).length;
+  const fileCount = files.length - folderCount;
+  const parts: string[] = [];
+
+  if (fileCount > 0) {
+    parts.push(`${fileCount} file${fileCount === 1 ? "" : "s"}`);
+  }
+
+  if (folderCount > 0) {
+    parts.push(`${folderCount} folder item${folderCount === 1 ? "" : "s"}`);
+  }
+
+  if (parts.length === 0) {
+    return null;
+  }
+
+  return `${parts.join(" and ")} uploaded`;
+}
+
 function normalizeFolderRelativePath(relativePath: string) {
   const normalized = relativePath
     .replaceAll("\\", "/")
     .split("/")
     .filter(Boolean);
 
-  if (normalized.length <= 1) {
-    return normalized[0] ?? "";
-  }
-
-  return normalized.slice(1).join("/");
+  return normalized.join("/");
 }
 
 function authHeaders(): { Authorization: string } {
@@ -790,19 +728,15 @@ async function abortMultipartUpload(
 
 async function previewBatchConflicts(
   runtime: UploadRuntime,
-  mode: UploadMode,
   files: UppyFile<UploadMeta, UploadBody>[],
 ): Promise<GithubComAbhishekPenDriveBackendInternalApiDtoDuplicatePreviewResponse | null> {
   if (files.length === 0) {
     return null;
   }
 
-  const relativePaths = files.map((file) =>
-    mode === "folder" ? file.meta.relativePath || file.name : file.name,
-  );
+  const relativePaths = files.map((file) => file.meta.relativePath || file.name);
 
   debugUpload("preview-request", {
-    mode,
     currentPath: runtime.currentPath,
     relativePaths,
   });
@@ -888,7 +822,6 @@ async function uploadOneFile({
 }) {
   try {
     const target = resolveUploadTarget(
-      file.meta.relativePath ? "folder" : "file",
       runtime.currentPath,
       file,
     );

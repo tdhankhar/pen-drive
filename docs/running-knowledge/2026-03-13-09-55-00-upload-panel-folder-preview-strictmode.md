@@ -12,18 +12,7 @@ The symptoms looked like duplicate detection was broken:
 
 ## Actual Cause
 
-Two separate frontend nuances combined:
-
-1. Browser folder selection uses `File.webkitRelativePath`, which includes the selected root folder name.
-
-Example:
-
-- browser value: `prompts/2306.17563v2.pdf`
-- backend contract expects path inside the selected folder: `2306.17563v2.pdf`
-
-If the frontend sends the raw browser value, the backend previews and uploads under an unintended top-level folder prefix.
-
-2. `configureUppy(...)` was being run twice in development under React `StrictMode`, which attached Uppy handlers twice to the same instance.
+The real bug was frontend-only: `configureUppy(...)` was being run twice in development under React `StrictMode`, which attached Uppy handlers twice to the same instance.
 
 That caused:
 
@@ -40,10 +29,11 @@ So the duplicate-resolution flow was triggered by the client running the uploade
 
 Two frontend fixes were required in `frontend/src/components/upload-panel.tsx`:
 
-1. Normalize folder relative paths before queueing and previewing:
+1. Keep folder-relative paths intact.
 
-- strip the selected root folder segment from `webkitRelativePath`
-- keep only the path inside the selected folder
+- `webkitRelativePath` should be normalized for separators only
+- the selected folder name remains part of the relative path
+- example: `scannedcopies/1.jpg` must stay `scannedcopies/1.jpg`
 
 2. Guard Uppy configuration so each Uppy instance is configured only once:
 
