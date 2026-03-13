@@ -2,7 +2,7 @@
 
 import { type Client, formDataBodySerializer, type Options as Options2, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { GetApiV1FilesData, GetApiV1FilesErrors, GetApiV1FilesResponses, GetApiV1MeData, GetApiV1MeErrors, GetApiV1MeResponses, PostApiV1AuthLoginData, PostApiV1AuthLoginErrors, PostApiV1AuthLoginResponses, PostApiV1AuthRefreshData, PostApiV1AuthRefreshErrors, PostApiV1AuthRefreshResponses, PostApiV1AuthSignupData, PostApiV1AuthSignupErrors, PostApiV1AuthSignupResponses, PostApiV1FilesDuplicatesPreviewData, PostApiV1FilesDuplicatesPreviewErrors, PostApiV1FilesDuplicatesPreviewResponses, PostApiV1FilesUploadData, PostApiV1FilesUploadErrors, PostApiV1FilesUploadFolderData, PostApiV1FilesUploadFolderErrors, PostApiV1FilesUploadFolderResponses, PostApiV1FilesUploadMultipartAbortData, PostApiV1FilesUploadMultipartAbortErrors, PostApiV1FilesUploadMultipartAbortResponses, PostApiV1FilesUploadMultipartCompleteData, PostApiV1FilesUploadMultipartCompleteErrors, PostApiV1FilesUploadMultipartCompleteResponses, PostApiV1FilesUploadMultipartInitiateData, PostApiV1FilesUploadMultipartInitiateErrors, PostApiV1FilesUploadMultipartInitiateResponses, PostApiV1FilesUploadMultipartPartData, PostApiV1FilesUploadMultipartPartErrors, PostApiV1FilesUploadMultipartPartResponses, PostApiV1FilesUploadResponses } from './types.gen';
+import type { DeleteApiV1FilesData, DeleteApiV1FilesErrors, DeleteApiV1FilesResponses, GetApiV1FilesData, GetApiV1FilesErrors, GetApiV1FilesResponses, GetApiV1MeData, GetApiV1MeErrors, GetApiV1MeResponses, PostApiV1AuthLoginData, PostApiV1AuthLoginErrors, PostApiV1AuthLoginResponses, PostApiV1AuthRefreshData, PostApiV1AuthRefreshErrors, PostApiV1AuthRefreshResponses, PostApiV1AuthSignupData, PostApiV1AuthSignupErrors, PostApiV1AuthSignupResponses, PostApiV1FilesDuplicatesPreviewData, PostApiV1FilesDuplicatesPreviewErrors, PostApiV1FilesDuplicatesPreviewResponses, PostApiV1FilesUploadData, PostApiV1FilesUploadErrors, PostApiV1FilesUploadFolderData, PostApiV1FilesUploadFolderErrors, PostApiV1FilesUploadFolderResponses, PostApiV1FilesUploadMultipartAbortData, PostApiV1FilesUploadMultipartAbortErrors, PostApiV1FilesUploadMultipartAbortResponses, PostApiV1FilesUploadMultipartCompleteData, PostApiV1FilesUploadMultipartCompleteErrors, PostApiV1FilesUploadMultipartCompleteResponses, PostApiV1FilesUploadMultipartInitiateData, PostApiV1FilesUploadMultipartInitiateErrors, PostApiV1FilesUploadMultipartInitiateResponses, PostApiV1FilesUploadMultipartPartData, PostApiV1FilesUploadMultipartPartErrors, PostApiV1FilesUploadMultipartPartResponses, PostApiV1FilesUploadResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean> = Options2<TData, ThrowOnError> & {
     /**
@@ -51,6 +51,17 @@ export const postApiV1AuthSignup = <ThrowOnError extends boolean = false>(option
         'Content-Type': 'application/json',
         ...options.headers
     }
+});
+
+/**
+ * Delete file or folder
+ *
+ * Soft-delete a file or folder tree by moving the object(s) to trash/<original-path>
+ */
+export const deleteApiV1Files = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1FilesData, ThrowOnError>) => (options.client ?? client).delete<DeleteApiV1FilesResponses, DeleteApiV1FilesErrors, ThrowOnError>({
+    security: [{ name: 'Authorization', type: 'apiKey' }],
+    url: '/api/v1/files',
+    ...options
 });
 
 /**

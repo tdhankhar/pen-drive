@@ -19,6 +19,10 @@ export type GithubComAbhishekPenDriveBackendInternalApiDtoCredentialsRequest = {
     password?: string;
 };
 
+export type GithubComAbhishekPenDriveBackendInternalApiDtoDeleteResponse = {
+    deleted_paths?: Array<string>;
+};
+
 export const GithubComAbhishekPenDriveBackendInternalApiDtoDuplicateConflictPolicy = {
     /**
      * DuplicateConflictPolicyReject
@@ -231,6 +235,52 @@ export type PostApiV1AuthSignupResponses = {
 };
 
 export type PostApiV1AuthSignupResponse = PostApiV1AuthSignupResponses[keyof PostApiV1AuthSignupResponses];
+
+export type DeleteApiV1FilesData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Relative file or folder path
+         */
+        path: string;
+        /**
+         * Entry type: file or folder
+         */
+        type: string;
+    };
+    url: '/api/v1/files';
+};
+
+export type DeleteApiV1FilesErrors = {
+    /**
+     * Bad Request
+     */
+    400: GithubComAbhishekPenDriveBackendInternalApiDtoErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: GithubComAbhishekPenDriveBackendInternalApiDtoErrorResponse;
+    /**
+     * Not Found
+     */
+    404: GithubComAbhishekPenDriveBackendInternalApiDtoErrorResponse;
+    /**
+     * Internal Server Error
+     */
+    500: GithubComAbhishekPenDriveBackendInternalApiDtoErrorResponse;
+};
+
+export type DeleteApiV1FilesError = DeleteApiV1FilesErrors[keyof DeleteApiV1FilesErrors];
+
+export type DeleteApiV1FilesResponses = {
+    /**
+     * OK
+     */
+    200: GithubComAbhishekPenDriveBackendInternalApiDtoDeleteResponse;
+};
+
+export type DeleteApiV1FilesResponse = DeleteApiV1FilesResponses[keyof DeleteApiV1FilesResponses];
 
 export type GetApiV1FilesData = {
     body?: never;

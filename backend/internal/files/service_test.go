@@ -15,6 +15,9 @@ import (
 )
 
 type stubStorageClient struct {
+	listPathInput          storage.ListPathInput
+	listPathResult         storage.ListPathResult
+	listPathErr            error
 	putInputs              []storage.PutObjectInput
 	putErr                 error
 	putErrFor              map[string]error
@@ -35,8 +38,9 @@ type stubStorageClient struct {
 	deleteErr              error
 }
 
-func (s *stubStorageClient) ListPath(context.Context, storage.ListPathInput) (storage.ListPathResult, error) {
-	return storage.ListPathResult{}, nil
+func (s *stubStorageClient) ListPath(_ context.Context, input storage.ListPathInput) (storage.ListPathResult, error) {
+	s.listPathInput = input
+	return s.listPathResult, s.listPathErr
 }
 
 func (s *stubStorageClient) PutObject(_ context.Context, input storage.PutObjectInput) (storage.PutObjectResult, error) {
@@ -124,6 +128,7 @@ func TestValidateDestinationPath(t *testing.T) {
 		{name: "empty path", input: "", want: ""},
 		{name: "trim and normalize", input: " /docs//reports/ ", want: "docs/reports"},
 		{name: "dot segments are removed", input: "./docs/./reports", want: "docs/reports"},
+		{name: "trash namespace rejected", input: "trash/docs", wantErr: true},
 		{name: "traversal rejected", input: "../docs", wantErr: true},
 		{name: "nested traversal rejected", input: "docs/../../secrets", wantErr: true},
 		{name: "backslash traversal rejected", input: `..\docs`, wantErr: true},
@@ -150,6 +155,100 @@ func TestValidateDestinationPath(t *testing.T) {
 				t.Fatalf("expected %q, got %q", tc.want, got)
 			}
 		})
+	}
+}
+
+func TestListHidesTrashNamespace(t *testing.T) {
+	t.Parallel()
+
+	service := NewService(&stubStorageClient{
+		listPathResult: storage.ListPathResult{
+			Folders: []storage.FolderEntry{
+				{Name: "docs", Path: "docs"},
+				{Name: "trash", Path: "trash"},
+			},
+			Files: []storage.FileEntry{
+				{Name: "readme.txt", Path: "readme.txt", Size: 7},
+				{Name: "report.pdf", Path: "trash/docs/report.pdf", Size: 42},
+			},
+		},
+	})
+
+	response, err := service.List(context.Background(), "user-123", "", "", 100)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(response.Entries) != 2 {
+		t.Fatalf("expected 2 visible entries, got %+v", response.Entries)
+	}
+	if response.Entries[0].Path != "docs" || response.Entries[1].Path != "readme.txt" {
+		t.Fatalf("unexpected visible entries: %+v", response.Entries)
+	}
+}
+
+func TestDeleteFileMovesObjectToTrash(t *testing.T) {
+	t.Parallel()
+
+	storageClient := &stubStorageClient{
+		existingKeys: map[string]bool{
+			"docs/report.pdf": true,
+		},
+	}
+	service := NewService(storageClient)
+
+	deletedPaths, err := service.Delete(
+		context.Background(),
+		"user-123",
+		"docs/report.pdf",
+		dto.FileSystemEntryTypeFile,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !slices.Equal(deletedPaths, []string{"docs/report.pdf"}) {
+		t.Fatalf("unexpected deleted paths: %+v", deletedPaths)
+	}
+	if len(storageClient.copyInputs) != 1 || storageClient.copyInputs[0].DestinationKey != "trash/docs/report.pdf" {
+		t.Fatalf("expected trash copy before delete, got %+v", storageClient.copyInputs)
+	}
+	if len(storageClient.deleteInputs) != 1 || storageClient.deleteInputs[0].Key != "docs/report.pdf" {
+		t.Fatalf("expected source delete after trash copy, got %+v", storageClient.deleteInputs)
+	}
+}
+
+func TestDeleteFolderMovesObjectTreeToTrash(t *testing.T) {
+	t.Parallel()
+
+	storageClient := &stubStorageClient{
+		listObjectKeys: []string{
+			"docs/reports/a.txt",
+			"docs/reports/b.txt",
+		},
+	}
+	service := NewService(storageClient)
+
+	deletedPaths, err := service.Delete(
+		context.Background(),
+		"user-123",
+		"docs/reports",
+		dto.FileSystemEntryTypeFolder,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	wantDeleted := []string{"docs/reports/a.txt", "docs/reports/b.txt"}
+	if !slices.Equal(deletedPaths, wantDeleted) {
+		t.Fatalf("expected deleted paths %v, got %v", wantDeleted, deletedPaths)
+	}
+	if len(storageClient.copyInputs) != 2 {
+		t.Fatalf("expected 2 copy operations, got %+v", storageClient.copyInputs)
+	}
+	if storageClient.copyInputs[0].DestinationKey != "trash/docs/reports/a.txt" ||
+		storageClient.copyInputs[1].DestinationKey != "trash/docs/reports/b.txt" {
+		t.Fatalf("unexpected trash destinations: %+v", storageClient.copyInputs)
 	}
 }
 

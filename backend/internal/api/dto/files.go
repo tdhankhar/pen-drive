@@ -8,6 +8,11 @@ type FileSystemEntry struct {
 	LastModified string `json:"last_modified,omitempty" example:"2026-03-12T16:00:00Z"`
 }
 
+const (
+	FileSystemEntryTypeFile   = "file"
+	FileSystemEntryTypeFolder = "folder"
+)
+
 type FileListResponse struct {
 	Path                  string            `json:"path" example:"docs"`
 	Entries               []FileSystemEntry `json:"entries"`
@@ -59,6 +64,10 @@ type DuplicatePreviewResponse struct {
 	HasConflicts  bool                   `json:"has_conflicts" example:"true"`
 	ImpactedPaths []string               `json:"impacted_paths,omitempty" example:"uploads/docs/report.pdf"`
 	Items         []DuplicatePreviewItem `json:"items"`
+}
+
+type DeleteResponse struct {
+	DeletedPaths []string `json:"deleted_paths" example:"docs/report.pdf"`
 }
 
 // FileUploadResponse is the response for a successful file upload

@@ -3,8 +3,8 @@
 import { queryOptions, type UseMutationOptions } from '@tanstack/react-query';
 
 import { client } from '../client.gen';
-import { getApiV1Files, getApiV1Me, type Options, postApiV1AuthLogin, postApiV1AuthRefresh, postApiV1AuthSignup, postApiV1FilesDuplicatesPreview, postApiV1FilesUpload, postApiV1FilesUploadFolder, postApiV1FilesUploadMultipartAbort, postApiV1FilesUploadMultipartComplete, postApiV1FilesUploadMultipartInitiate, postApiV1FilesUploadMultipartPart } from '../sdk.gen';
-import type { GetApiV1FilesData, GetApiV1FilesError, GetApiV1FilesResponse, GetApiV1MeData, GetApiV1MeError, GetApiV1MeResponse, PostApiV1AuthLoginData, PostApiV1AuthLoginError, PostApiV1AuthLoginResponse, PostApiV1AuthRefreshData, PostApiV1AuthRefreshError, PostApiV1AuthRefreshResponse, PostApiV1AuthSignupData, PostApiV1AuthSignupError, PostApiV1AuthSignupResponse, PostApiV1FilesDuplicatesPreviewData, PostApiV1FilesDuplicatesPreviewError, PostApiV1FilesDuplicatesPreviewResponse, PostApiV1FilesUploadData, PostApiV1FilesUploadError, PostApiV1FilesUploadFolderData, PostApiV1FilesUploadFolderError, PostApiV1FilesUploadFolderResponse, PostApiV1FilesUploadMultipartAbortData, PostApiV1FilesUploadMultipartAbortError, PostApiV1FilesUploadMultipartCompleteData, PostApiV1FilesUploadMultipartCompleteError, PostApiV1FilesUploadMultipartCompleteResponse, PostApiV1FilesUploadMultipartInitiateData, PostApiV1FilesUploadMultipartInitiateError, PostApiV1FilesUploadMultipartInitiateResponse, PostApiV1FilesUploadMultipartPartData, PostApiV1FilesUploadMultipartPartError, PostApiV1FilesUploadMultipartPartResponse, PostApiV1FilesUploadResponse } from '../types.gen';
+import { deleteApiV1Files, getApiV1Files, getApiV1Me, type Options, postApiV1AuthLogin, postApiV1AuthRefresh, postApiV1AuthSignup, postApiV1FilesDuplicatesPreview, postApiV1FilesUpload, postApiV1FilesUploadFolder, postApiV1FilesUploadMultipartAbort, postApiV1FilesUploadMultipartComplete, postApiV1FilesUploadMultipartInitiate, postApiV1FilesUploadMultipartPart } from '../sdk.gen';
+import type { DeleteApiV1FilesData, DeleteApiV1FilesError, DeleteApiV1FilesResponse, GetApiV1FilesData, GetApiV1FilesError, GetApiV1FilesResponse, GetApiV1MeData, GetApiV1MeError, GetApiV1MeResponse, PostApiV1AuthLoginData, PostApiV1AuthLoginError, PostApiV1AuthLoginResponse, PostApiV1AuthRefreshData, PostApiV1AuthRefreshError, PostApiV1AuthRefreshResponse, PostApiV1AuthSignupData, PostApiV1AuthSignupError, PostApiV1AuthSignupResponse, PostApiV1FilesDuplicatesPreviewData, PostApiV1FilesDuplicatesPreviewError, PostApiV1FilesDuplicatesPreviewResponse, PostApiV1FilesUploadData, PostApiV1FilesUploadError, PostApiV1FilesUploadFolderData, PostApiV1FilesUploadFolderError, PostApiV1FilesUploadFolderResponse, PostApiV1FilesUploadMultipartAbortData, PostApiV1FilesUploadMultipartAbortError, PostApiV1FilesUploadMultipartCompleteData, PostApiV1FilesUploadMultipartCompleteError, PostApiV1FilesUploadMultipartCompleteResponse, PostApiV1FilesUploadMultipartInitiateData, PostApiV1FilesUploadMultipartInitiateError, PostApiV1FilesUploadMultipartInitiateResponse, PostApiV1FilesUploadMultipartPartData, PostApiV1FilesUploadMultipartPartError, PostApiV1FilesUploadMultipartPartResponse, PostApiV1FilesUploadResponse } from '../types.gen';
 
 /**
  * Log in
@@ -53,6 +53,25 @@ export const postApiV1AuthSignupMutation = (options?: Partial<Options<PostApiV1A
     const mutationOptions: UseMutationOptions<PostApiV1AuthSignupResponse, PostApiV1AuthSignupError, Options<PostApiV1AuthSignupData>> = {
         mutationFn: async (fnOptions) => {
             const { data } = await postApiV1AuthSignup({
+                ...options,
+                ...fnOptions,
+                throwOnError: true
+            });
+            return data;
+        }
+    };
+    return mutationOptions;
+};
+
+/**
+ * Delete file or folder
+ *
+ * Soft-delete a file or folder tree by moving the object(s) to trash/<original-path>
+ */
+export const deleteApiV1FilesMutation = (options?: Partial<Options<DeleteApiV1FilesData>>): UseMutationOptions<DeleteApiV1FilesResponse, DeleteApiV1FilesError, Options<DeleteApiV1FilesData>> => {
+    const mutationOptions: UseMutationOptions<DeleteApiV1FilesResponse, DeleteApiV1FilesError, Options<DeleteApiV1FilesData>> = {
+        mutationFn: async (fnOptions) => {
+            const { data } = await deleteApiV1Files({
                 ...options,
                 ...fnOptions,
                 throwOnError: true

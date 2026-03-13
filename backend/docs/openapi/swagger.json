@@ -203,6 +203,69 @@
                         }
                     }
                 }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Soft-delete a file or folder tree by moving the object(s) to trash/\u003coriginal-path\u003e",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "files"
+                ],
+                "summary": "Delete file or folder",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Relative file or folder path",
+                        "name": "path",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Entry type: file or folder",
+                        "name": "type",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.DeleteResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    }
+                }
             }
         },
         "/api/v1/files/duplicates/preview": {
@@ -738,6 +801,20 @@
                 "password": {
                     "type": "string",
                     "example": "Password123!"
+                }
+            }
+        },
+        "github_com_abhishek_pen-drive_backend_internal_api_dto.DeleteResponse": {
+            "type": "object",
+            "properties": {
+                "deleted_paths": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "docs/report.pdf"
+                    ]
                 }
             }
         },

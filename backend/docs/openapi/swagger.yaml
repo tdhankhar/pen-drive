@@ -25,6 +25,15 @@ definitions:
         example: Password123!
         type: string
     type: object
+  github_com_abhishek_pen-drive_backend_internal_api_dto.DeleteResponse:
+    properties:
+      deleted_paths:
+        example:
+        - docs/report.pdf
+        items:
+          type: string
+        type: array
+    type: object
   github_com_abhishek_pen-drive_backend_internal_api_dto.DuplicateConflictPolicy:
     enum:
     - reject
@@ -331,6 +340,47 @@ paths:
       tags:
       - auth
   /api/v1/files:
+    delete:
+      description: Soft-delete a file or folder tree by moving the object(s) to trash/<original-path>
+      parameters:
+      - description: Relative file or folder path
+        in: query
+        name: path
+        required: true
+        type: string
+      - description: 'Entry type: file or folder'
+        in: query
+        name: type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.DeleteResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete file or folder
+      tags:
+      - files
     get:
       description: List folders and files under the authenticated user's bucket path.
       parameters:

@@ -40,6 +40,21 @@ export const github_com_abhishek_pen_drive_backend_internal_api_dto_CredentialsR
     }
 } as const;
 
+export const github_com_abhishek_pen_drive_backend_internal_api_dto_DeleteResponseSchema = {
+    type: 'object',
+    properties: {
+        deleted_paths: {
+            type: 'array',
+            items: {
+                type: 'string'
+            },
+            example: [
+                'docs/report.pdf'
+            ]
+        }
+    }
+} as const;
+
 export const github_com_abhishek_pen_drive_backend_internal_api_dto_DuplicateConflictPolicySchema = {
     type: 'string',
     enum: [

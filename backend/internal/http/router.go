@@ -96,6 +96,7 @@ func NewRouter(logger *slog.Logger, dbConn *sql.DB, storageClient *storage.Clien
 
 	api.GET("/me", authHandler.AuthMiddleware(), authHandler.Me)
 	api.GET("/files", authHandler.AuthMiddleware(), filesHandler.List)
+	api.DELETE("/files", authHandler.AuthMiddleware(), filesHandler.Delete)
 	api.POST("/files/duplicates/preview", authHandler.AuthMiddleware(), filesHandler.PreviewDuplicates)
 	api.POST("/files/upload", authHandler.AuthMiddleware(), filesHandler.Upload)
 	api.POST("/files/upload-folder", authHandler.AuthMiddleware(), filesHandler.UploadFolder)

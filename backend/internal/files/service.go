@@ -19,9 +19,11 @@ var (
 	ErrInvalidUploadInput = errors.New("invalid upload input")
 	ErrZeroByteFile       = errors.New("zero byte file")
 	ErrDuplicateBatchKey  = errors.New("duplicate target key in batch")
+	ErrPathNotFound       = errors.New("path not found")
 )
 
 const multipartPartSize int64 = 5 * 1024 * 1024
+const trashNamespace = "trash"
 
 type Service struct {
 	storage storageClient
@@ -80,18 +82,24 @@ func (s *Service) List(ctx context.Context, userID, rawPath, continuationToken s
 
 	entries := make([]dto.FileSystemEntry, 0, len(result.Folders)+len(result.Files))
 	for _, folder := range result.Folders {
+		if isTrashPath(folder.Path) {
+			continue
+		}
 		entries = append(entries, dto.FileSystemEntry{
 			Name: folder.Name,
 			Path: folder.Path,
-			Type: "folder",
+			Type: dto.FileSystemEntryTypeFolder,
 		})
 	}
 
 	for _, file := range result.Files {
+		if isTrashPath(file.Path) {
+			continue
+		}
 		entry := dto.FileSystemEntry{
 			Name: file.Name,
 			Path: file.Path,
-			Type: "file",
+			Type: dto.FileSystemEntryTypeFile,
 			Size: file.Size,
 		}
 		if !file.LastModified.IsZero() {
@@ -113,6 +121,49 @@ func (s *Service) List(ctx context.Context, userID, rawPath, continuationToken s
 		NextContinuationToken: result.NextContinuationToken,
 		HasMore:               result.HasMore,
 	}, nil
+}
+
+func (s *Service) Delete(ctx context.Context, userID, targetPath, entryType string) ([]string, error) {
+	validatedPath, err := validateRelativePath(targetPath)
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid path: %v", ErrInvalidUploadInput, err)
+	}
+
+	switch strings.TrimSpace(entryType) {
+	case dto.FileSystemEntryTypeFile:
+		exists, err := s.objectExists(ctx, userID, validatedPath)
+		if err != nil {
+			return nil, err
+		}
+		if !exists {
+			return nil, ErrPathNotFound
+		}
+		if err := s.moveObjectToTrash(ctx, userID, validatedPath); err != nil {
+			return nil, err
+		}
+		return []string{validatedPath}, nil
+	case dto.FileSystemEntryTypeFolder:
+		keys, err := s.storage.ListObjectKeys(ctx, storage.ListObjectKeysInput{
+			Bucket: userID,
+			Prefix: toPrefix(validatedPath),
+		})
+		if err != nil {
+			return nil, err
+		}
+		keys = filterTrashKeys(keys)
+		if len(keys) == 0 {
+			return nil, ErrPathNotFound
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			if err := s.moveObjectToTrash(ctx, userID, key); err != nil {
+				return nil, err
+			}
+		}
+		return keys, nil
+	default:
+		return nil, fmt.Errorf("%w: unsupported entry type %q", ErrInvalidUploadInput, entryType)
+	}
 }
 
 func normalizePath(path string) string {
@@ -287,6 +338,9 @@ func validateDestinationPath(rawPath string) (string, error) {
 	if cleaned == "." {
 		return "", nil
 	}
+	if isTrashPath(cleaned) {
+		return "", errors.New("path cannot target the internal trash namespace")
+	}
 
 	return cleaned, nil
 }
@@ -336,6 +390,9 @@ func validateRelativePath(rawPath string) (string, error) {
 	}
 
 	result := strings.Join(validParts, "/")
+	if isTrashPath(result) {
+		return "", errors.New("path cannot target the internal trash namespace")
+	}
 	return result, nil
 }
 
@@ -829,4 +886,20 @@ func (s *Service) moveObjectToTrash(ctx context.Context, userID string, key stri
 	}
 
 	return nil
+}
+
+func isTrashPath(key string) bool {
+	normalized := normalizePath(key)
+	return normalized == trashNamespace || strings.HasPrefix(normalized, trashNamespace+"/")
+}
+
+func filterTrashKeys(keys []string) []string {
+	filtered := make([]string, 0, len(keys))
+	for _, key := range keys {
+		if isTrashPath(key) {
+			continue
+		}
+		filtered = append(filtered, key)
+	}
+	return filtered
 }

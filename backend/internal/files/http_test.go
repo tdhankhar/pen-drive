@@ -170,6 +170,60 @@ func TestUploadFolderHandlerReturnsCreated(t *testing.T) {
 	}
 }
 
+func TestDeleteHandlerReturnsDeletedPaths(t *testing.T) {
+	t.Parallel()
+
+	gin.SetMode(gin.TestMode)
+	service := NewService(&stubStorageClient{
+		existingKeys: map[string]bool{
+			"docs/report.pdf": true,
+		},
+	})
+	handler := NewHandler(service)
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set("auth.user_id", "user-123")
+		c.Next()
+	})
+	router.DELETE("/files", handler.Delete)
+
+	request := httptest.NewRequest(http.MethodDelete, "/files?path=docs/report.pdf&type=file", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", response.Code)
+	}
+	if !strings.Contains(response.Body.String(), `"deleted_paths":["docs/report.pdf"]`) {
+		t.Fatalf("expected deleted path in response, got %s", response.Body.String())
+	}
+}
+
+func TestDeleteHandlerReturnsNotFound(t *testing.T) {
+	t.Parallel()
+
+	gin.SetMode(gin.TestMode)
+	service := NewService(&stubStorageClient{})
+	handler := NewHandler(service)
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set("auth.user_id", "user-123")
+		c.Next()
+	})
+	router.DELETE("/files", handler.Delete)
+
+	request := httptest.NewRequest(http.MethodDelete, "/files?path=docs/report.pdf&type=file", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", response.Code)
+	}
+	if !strings.Contains(response.Body.String(), `"code":"not_found"`) {
+		t.Fatalf("expected not_found error, got %s", response.Body.String())
+	}
+}
+
 func TestInitiateMultipartUploadHandlerReturnsCreated(t *testing.T) {
 	t.Parallel()
 

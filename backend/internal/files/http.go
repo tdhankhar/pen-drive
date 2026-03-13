@@ -60,6 +60,46 @@ func (h *Handler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// Delete godoc
+// @Summary Delete file or folder
+// @Description Soft-delete a file or folder tree by moving the object(s) to trash/<original-path>
+// @Tags files
+// @Produce json
+// @Security BearerAuth
+// @Param path query string true "Relative file or folder path"
+// @Param type query string true "Entry type: file or folder"
+// @Success 200 {object} dto.DeleteResponse
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 401 {object} dto.ErrorResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Failure 500 {object} dto.ErrorResponse
+// @Router /api/v1/files [delete]
+func (h *Handler) Delete(c *gin.Context) {
+	userID, _ := c.Get("auth.user_id")
+
+	deletedPaths, err := h.service.Delete(
+		c.Request.Context(),
+		userID.(string),
+		c.Query("path"),
+		c.Query("type"),
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrInvalidUploadInput):
+			respondError(c, http.StatusBadRequest, "invalid_input", err.Error())
+		case errors.Is(err, ErrPathNotFound):
+			respondError(c, http.StatusNotFound, "not_found", err.Error())
+		default:
+			respondError(c, http.StatusInternalServerError, "delete_failed", err.Error())
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.DeleteResponse{
+		DeletedPaths: deletedPaths,
+	})
+}
+
 // PreviewDuplicates godoc
 // @Summary Preview duplicate conflicts
 // @Description Preview impacted files and rename targets before uploading a file or folder

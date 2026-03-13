@@ -11,8 +11,9 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Folder, FileText, ArrowUp } from "lucide-react";
+import { Folder, FileText, ArrowUp, Trash2 } from "lucide-react";
 import { UploadPanel } from "../components/upload-panel";
+import { deleteApiV1Files } from "../lib/api/generated";
 import {
   getApiV1FilesOptions,
   getApiV1FilesQueryKey,
@@ -31,6 +32,8 @@ export function DashboardPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const currentPath = searchParams.get("path") ?? "";
   const segments = currentPath.split("/").filter(Boolean);
+  const [deleteError, setDeleteError] = React.useState<string | null>(null);
+  const [deletingPath, setDeletingPath] = React.useState<string | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -52,6 +55,50 @@ export function DashboardPage() {
     }
 
     setSearchParams({});
+  }
+
+  async function refreshListing() {
+    await queryClient.invalidateQueries({
+      queryKey: getApiV1FilesQueryKey({ client: apiClient }),
+    });
+  }
+
+  async function handleDelete(entry: GithubComAbhishekPenDriveBackendInternalApiDtoFileSystemEntry) {
+    if (!entry.path || !entry.type) {
+      return;
+    }
+
+    const label = entry.type === "folder" ? "folder" : "file";
+    const confirmed = window.confirm(`Move this ${label} to trash?\n\n${entry.path}`);
+    if (!confirmed) {
+      return;
+    }
+
+    setDeleteError(null);
+    setDeletingPath(entry.path);
+
+    try {
+      const { error, response } = await deleteApiV1Files({
+        client: apiClient,
+        query: {
+          path: entry.path,
+          type: entry.type,
+        },
+      });
+
+      if (error) {
+        const message =
+          error.error?.message ||
+          `delete failed with status ${response.status}`;
+        throw new Error(message);
+      }
+
+      await refreshListing();
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "delete failed");
+    } finally {
+      setDeletingPath(null);
+    }
   }
 
   return (
@@ -138,11 +185,7 @@ export function DashboardPage() {
 
       <UploadPanel
         currentPath={currentPath}
-        onUploaded={() =>
-          queryClient.invalidateQueries({
-            queryKey: getApiV1FilesQueryKey({ client: apiClient }),
-          })
-        }
+        onUploaded={refreshListing}
       />
       <section className="rounded-lg border bg-card">
         {isLoading ? (
@@ -151,6 +194,7 @@ export function DashboardPage() {
           </p>
         ) : null}
         {error ? <p className="p-4 text-sm text-destructive">{(error as Error).message}</p> : null}
+        {deleteError ? <p className="p-4 text-sm text-destructive">{deleteError}</p> : null}
         {!isLoading && !error ? (
           <ul className="divide-y">
             {currentPath ? (
@@ -172,31 +216,43 @@ export function DashboardPage() {
             ) : null}
             {listing?.entries?.map((entry) => (
               <li key={`${entry.type}:${entry.path}`}>
-                <button
-                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/50 text-left disabled:opacity-50 disabled:cursor-default"
-                  disabled={entry.type !== "folder"}
-                  onClick={() => {
-                    if (entry.type === "folder" && entry.path) {
-                      openPath(entry.path);
-                    }
-                  }}
-                  type="button"
-                >
-                  {entry.type === "folder" ? (
-                    <Folder className="w-5 h-5 text-muted-foreground shrink-0" />
-                  ) : (
-                    <FileText className="w-5 h-5 text-muted-foreground shrink-0" />
-                  )}
-                  <span className="font-medium text-sm flex-1 truncate">
-                    {entry.name}
-                  </span>
-                  <span className="text-xs text-muted-foreground truncate max-w-xs">
-                    {entry.path}
-                  </span>
-                  <span className="text-xs text-muted-foreground shrink-0">
-                    {formatEntryMeta(entry)}
-                  </span>
-                </button>
+                <div className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50">
+                  <button
+                    className="flex min-w-0 flex-1 items-center gap-3 text-left disabled:cursor-default disabled:opacity-50"
+                    disabled={entry.type !== "folder"}
+                    onClick={() => {
+                      if (entry.type === "folder" && entry.path) {
+                        openPath(entry.path);
+                      }
+                    }}
+                    type="button"
+                  >
+                    {entry.type === "folder" ? (
+                      <Folder className="w-5 h-5 text-muted-foreground shrink-0" />
+                    ) : (
+                      <FileText className="w-5 h-5 text-muted-foreground shrink-0" />
+                    )}
+                    <span className="font-medium text-sm flex-1 truncate">
+                      {entry.name}
+                    </span>
+                    <span className="text-xs text-muted-foreground truncate max-w-xs">
+                      {entry.path}
+                    </span>
+                    <span className="text-xs text-muted-foreground shrink-0">
+                      {formatEntryMeta(entry)}
+                    </span>
+                  </button>
+                  <Button
+                    aria-label={`Delete ${entry.path || entry.name || "entry"}`}
+                    disabled={!entry.path || deletingPath === entry.path}
+                    onClick={() => void handleDelete(entry)}
+                    size="icon"
+                    type="button"
+                    variant="ghost"
+                  >
+                    <Trash2 />
+                  </Button>
+                </div>
               </li>
             ))}
             {!listing?.entries?.length ? (
