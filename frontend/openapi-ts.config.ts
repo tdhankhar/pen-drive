@@ -14,5 +14,6 @@ export default defineConfig({
       name: '@hey-api/typescript',
       enums: 'javascript',
     },
+    '@tanstack/react-query',
   ],
 });

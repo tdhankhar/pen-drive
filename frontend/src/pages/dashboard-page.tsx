@@ -13,13 +13,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { UploadPanel } from "../components/upload-panel";
-import { getApiV1Files } from "../lib/api/generated";
+import {
+  getApiV1FilesOptions,
+  getApiV1FilesQueryKey,
+} from "../lib/api/generated/@tanstack/react-query.gen";
 import type {
   GithubComAbhishekPenDriveBackendInternalApiDtoFileSystemEntry,
 } from "../lib/api/generated";
-import { apiClient } from "../lib/api/http";
 import { useAuth } from "../lib/use-auth";
-
 export function DashboardPage() {
   const auth = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -30,20 +31,11 @@ export function DashboardPage() {
   const queryClient = useQueryClient();
 
   const { data: listing, isLoading, error } = useQuery({
-    queryKey: ['files', currentPath, session?.accessToken],
-    queryFn: async () => {
-      if (!session) throw new Error('no session');
-      const { data, error } = await getApiV1Files({
-        client: apiClient,
-        query: currentPath ? { path: currentPath } : undefined,
-        headers: { Authorization: `Bearer ${session.accessToken}` },
-      });
-      if (error) throw new Error((error as { error?: { message?: string } }).error?.message ?? 'listing failed');
-      return data ?? null;
-    },
+    ...getApiV1FilesOptions({
+      query: currentPath ? { path: currentPath } : undefined,
+    }),
     enabled: !!session,
   });
-
   if (!session) {
     return <Navigate replace to="/login" />;
   }
@@ -140,11 +132,9 @@ export function DashboardPage() {
       </section>
 
       <UploadPanel
-        accessToken={session.accessToken}
         currentPath={currentPath}
-        onUploaded={() => queryClient.invalidateQueries({ queryKey: ['files', currentPath] })}
+        onUploaded={() => queryClient.invalidateQueries({ queryKey: getApiV1FilesQueryKey() })}
       />
-
       <section className="rounded-lg border bg-card">
         {isLoading ? (
           <p className="p-4 text-sm text-muted-foreground">

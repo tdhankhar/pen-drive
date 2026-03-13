@@ -42,12 +42,12 @@ import type {
   PostApiV1FilesUploadData,
 } from "../lib/api/generated";
 import { apiClient } from "../lib/api/http";
+import { readSession } from "../lib/session";
 
 const MULTIPART_THRESHOLD_BYTES = 5 * 1024 * 1024;
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8080";
 
 type UploadPanelProps = {
-  accessToken: string;
   currentPath: string;
   onUploaded: () => Promise<void> | void;
 };
@@ -61,7 +61,6 @@ type UploadBody = Record<string, never>;
 type UploadMode = "file" | "folder";
 
 type UploadRuntime = {
-  accessToken: string;
   currentPath: string;
 };
 
@@ -77,11 +76,10 @@ type UploadConflictPolicy = Exclude<
 >;
 
 export function UploadPanel({
-  accessToken,
   currentPath,
   onUploaded,
 }: UploadPanelProps) {
-  const runtimeRef = useRef<UploadRuntime>({ accessToken, currentPath });
+  const runtimeRef = useRef<UploadRuntime>({ currentPath });
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   const pendingConflictResolverRef = useRef<
     ((policy: UploadConflictPolicy | null) => void) | null
@@ -124,8 +122,8 @@ export function UploadPanel({
   }
 
   useEffect(() => {
-    runtimeRef.current = { accessToken, currentPath };
-  }, [accessToken, currentPath]);
+    runtimeRef.current = { currentPath };
+  }, [currentPath]);
 
   useEffect(() => {
     configureUppy({
@@ -583,17 +581,20 @@ function isMultipartEligible(file: UppyFile<UploadMeta, UploadBody>) {
   return typeof file.size === "number" && file.size > MULTIPART_THRESHOLD_BYTES;
 }
 
-function authHeaders(token: string): { Authorization: string } {
-  return { Authorization: `Bearer ${token}` };
+function authHeaders(): { Authorization: string } {
+  const session = readSession();
+  if (!session?.accessToken) {
+    throw new Error("missing access token");
+  }
+
+  return { Authorization: `Bearer ${session.accessToken}` };
 }
 
 async function uploadViaSingleRequest(
-  runtime: UploadRuntime,
   target: {
     filename: string;
     path: string;
-  },
-  file: UppyFile<UploadMeta, UploadBody>,
+  },  file: UppyFile<UploadMeta, UploadBody>,
   conflictPolicy: GithubComAbhishekPenDriveBackendInternalApiDtoDuplicateConflictPolicy,
   onProgress?: (bytesUploaded: number, bytesTotal: number) => void,
 ): Promise<UploadBody | undefined> {
@@ -614,19 +615,17 @@ async function uploadViaSingleRequest(
 
   return uploadFormData<UploadBody | undefined>({
     body,
-    headers: authHeaders(runtime.accessToken),
+    headers: authHeaders(),
     onProgress,
     url: "/api/v1/files/upload",
   });
 }
 
 async function uploadViaMultipart(
-  runtime: UploadRuntime,
   target: {
     filename: string;
     path: string;
-  },
-  file: UppyFile<UploadMeta, UploadBody>,
+  },  file: UppyFile<UploadMeta, UploadBody>,
   conflictPolicy: GithubComAbhishekPenDriveBackendInternalApiDtoDuplicateConflictPolicy,
   onProgress?: (bytesUploaded: number, bytesTotal: number) => void,
 ): Promise<UploadBody | undefined> {
@@ -646,7 +645,7 @@ async function uploadViaMultipart(
         path: target.path,
         size: file.size,
       },
-      headers: authHeaders(runtime.accessToken),
+      headers: authHeaders(),
     });
   if (initiateError) {
     throw new Error(getErrorMessage(initiateError, initiateResponse.status));
@@ -665,7 +664,6 @@ async function uploadViaMultipart(
     ) {
       const chunk = fileData.slice(offset, offset + initiatePayload.part_size);
       const partData = await uploadMultipartPart({
-        accessToken: runtime.accessToken,
         chunk,
         key: initiatePayload.key,
         partNumber,
@@ -694,7 +692,7 @@ async function uploadViaMultipart(
           parts: uploadedParts,
           upload_id: initiatePayload.upload_id,
         },
-        headers: authHeaders(runtime.accessToken),
+        headers: authHeaders(),
       });
     if (completeError) {
       throw new Error(getErrorMessage(completeError, completeResponse.status));
@@ -702,22 +700,20 @@ async function uploadViaMultipart(
 
     return completeData as UploadBody | undefined;
   } catch (error) {
-    await abortMultipartUpload(runtime, initiatePayload);
+    await abortMultipartUpload(initiatePayload);
     throw error;
   }
 }
 
 async function abortMultipartUpload(
-  runtime: UploadRuntime,
   multipart: GithubComAbhishekPenDriveBackendInternalApiDtoMultipartUploadInitiateResponse,
 ) {
   await postApiV1FilesUploadMultipartAbort({
-    client: apiClient,
-    body: {
+    client: apiClient,    body: {
       key: multipart.key,
       upload_id: multipart.upload_id,
     },
-    headers: authHeaders(runtime.accessToken),
+    headers: authHeaders(),
   });
 }
 
@@ -740,7 +736,7 @@ async function previewBatchConflicts(
       path: runtime.currentPath,
       relative_paths: relativePaths,
     },
-    headers: authHeaders(runtime.accessToken),
+    headers: authHeaders(),
   });
   if (error) throw new Error(getErrorMessage(error, response.status));
 
@@ -776,7 +772,7 @@ async function uploadFolderBatch(
         path: runtime.currentPath || undefined,
         relative_paths: batchFiles.map(({ relativePath }) => relativePath),
       },
-      headers: authHeaders(runtime.accessToken),
+      headers: authHeaders(),
       onProgress: (bytesUploaded) => {
         onProgress?.(distributeBatchProgress(files, bytesUploaded));
       },
@@ -820,13 +816,11 @@ async function uploadOneFile({
       file,
     );
     const responseBody = isMultipartEligible(file)
-      ? await uploadViaMultipart(runtime, target, file, conflictPolicy, (bytesUploaded, bytesTotal) =>
+      ? await uploadViaMultipart(target, file, conflictPolicy, (bytesUploaded, bytesTotal) =>
           updateFileProgress(uppy, file.id, bytesUploaded, bytesTotal),
-        )
-      : await uploadViaSingleRequest(runtime, target, file, conflictPolicy, (bytesUploaded, bytesTotal) =>
+        )      : await uploadViaSingleRequest(target, file, conflictPolicy, (bytesUploaded, bytesTotal) =>
           updateFileProgress(uppy, file.id, bytesUploaded, bytesTotal),
         );
-
     markFileComplete(uppy, file.id);
     const refreshed = uppy.getFile(file.id);
     if (!refreshed) {
@@ -917,7 +911,6 @@ function distributeBatchProgress(
 }
 
 async function uploadMultipartPart({
-  accessToken,
   chunk,
   filename,
   key,
@@ -925,7 +918,6 @@ async function uploadMultipartPart({
   uploadId,
   onProgress,
 }: {
-  accessToken: string;
   chunk: Blob;
   filename: string;
   key: string;
@@ -943,7 +935,7 @@ async function uploadMultipartPart({
         part_number: String(partNumber),
         upload_id: uploadId,
       },
-      headers: authHeaders(accessToken),
+      headers: authHeaders(),
       onProgress: (bytesUploaded) => {
         onProgress?.(bytesUploaded);
       },
