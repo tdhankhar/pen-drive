@@ -9,6 +9,8 @@ oxc_span = "0.118"
 oxc_allocator = "0.118"
 oxc_ast = "0.118"
 oxc_ast_visit = "0.118"
+oxc_semantic = "0.118"
+oxc_syntax = "0.118"
 walkdir = "2"
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }

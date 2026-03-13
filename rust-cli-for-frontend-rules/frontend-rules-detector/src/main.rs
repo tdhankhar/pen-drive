@@ -1,9 +1,10 @@
 use anyhow::Result;
 use clap::Parser;
 use oxc_allocator::Allocator;
-use oxc_ast::ast::Statement;
+use oxc_ast::ast::{Expression, LogicalExpression, LogicalOperator};
+use oxc_ast_visit::Visit;
 use oxc_parser::Parser as OxcParser;
-use oxc_span::SourceType;
+use oxc_span::{GetSpan, SourceType};
 use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
@@ -47,7 +48,7 @@ fn main() -> Result<()> {
         let path = entry.path();
         if let Ok(content) = fs::read_to_string(path) {
             if args.rules.contains("rendering-conditional-render") {
-                check_conditional_render(&mut violations, path, &content);
+                check_conditional_render_ast(&mut violations, path, &content);
             }
             if args.rules.contains("js-flatmap-filter") {
                 check_flatmap_filter(&mut violations, path, &content);
@@ -61,7 +62,6 @@ fn main() -> Result<()> {
     } else {
         println!("Found {} violations:\n", violations.len());
 
-        // Group by rule
         let mut by_rule = std::collections::BTreeMap::new();
         for v in violations {
             by_rule
@@ -85,90 +85,167 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn check_conditional_render(
+fn check_conditional_render_ast(
     violations: &mut Vec<Violation>,
     path: &Path,
     content: &str,
 ) {
-    let lines: Vec<&str> = content.lines().collect();
+    let source_type = SourceType::from_path(path).unwrap_or_default();
+    let allocator = Allocator::default();
+    let parser = OxcParser::new(&allocator, content, source_type);
+    let ret = parser.parse();
+    let program = ret.program;
 
-    for (line_num, line) in lines.iter().enumerate() {
-        let line_no = (line_num + 1) as u32;
+    let mut visitor = ConditionalRenderVisitor {
+        violations,
+        file_path: path.display().to_string(),
+        source: content,
+    };
 
-        // Look for JSX expression with && pattern
-        if let Some(brace_pos) = line.find('{') {
-            // Find the closing brace
-            if let Some(close_brace) = line[brace_pos + 1..].find('}') {
-                let expr = &line[brace_pos + 1..brace_pos + 1 + close_brace];
+    visitor.visit_program(&program);
+}
 
-                // Check for && operator
-                if let Some(and_pos) = expr.find("&&") {
-                    let before_and = expr[..and_pos].trim();
-                    let after_and = expr[and_pos + 2..].trim();
+struct ConditionalRenderVisitor<'a> {
+    violations: &'a mut Vec<Violation>,
+    file_path: String,
+    source: &'a str,
+}
 
-                    // Must have JSX after && (look for < character)
-                    if after_and.starts_with('<') {
-                        // Check if the condition is unsafe
-                        if is_unsafe_condition(before_and) {
-                            let col = (brace_pos + 1 + and_pos) as u32;
-                            violations.push(Violation {
-                                rule: "rendering-conditional-render".to_string(),
-                                file: path.display().to_string(),
-                                line: line_no,
-                                column: col,
-                                message: format!("Unsafe && with '{}' – use ternary or explicit boolean check", before_and),
-                            });
-                        }
+impl<'ast> Visit<'ast> for ConditionalRenderVisitor<'_> {
+    fn visit_logical_expression(&mut self, expr: &LogicalExpression<'ast>) {
+        // Check for && operator in conditional render context
+        if expr.operator == LogicalOperator::And {
+            // Check if right side is JSX - extract text from the AST span
+            let right_start = expr.right.span().start as usize;
+            let right_end = expr.right.span().end as usize;
+            
+            if right_start < self.source.len() && right_end <= self.source.len() {
+                let right_str = self.source[right_start..right_end].trim();
+                
+                // Check if this is JSX (right side starts with <)
+                if right_str.starts_with('<') {
+                    // Evaluate left side - check if it's a safe condition
+                    if !is_safe_condition(&expr.left) {
+                        // Extract left side text for error message
+                        let left_start = expr.left.span().start as usize;
+                        let left_end = expr.left.span().end as usize;
+                        let left_str = if left_start < self.source.len() && left_end <= self.source.len() {
+                            self.source[left_start..left_end].trim().to_string()
+                        } else {
+                            "condition".to_string()
+                        };
+
+                        let (line, col) = get_line_col(expr.span.start, self.source);
+                        self.violations.push(Violation {
+                            rule: "rendering-conditional-render".to_string(),
+                            file: self.file_path.clone(),
+                            line,
+                            column: col,
+                            message: format!(
+                                "Unsafe && with '{}' – use ternary or explicit boolean check",
+                                left_str
+                            ),
+                        });
                     }
                 }
             }
         }
+
+        oxc_ast_visit::walk::walk_logical_expression(self, expr);
     }
 }
 
-fn is_unsafe_condition(condition: &str) -> bool {
-    let trimmed = condition.trim();
+fn is_safe_condition(expr: &Expression) -> bool {
+    match expr {
+        // Safe: boolean identifiers
+        Expression::Identifier(id) => is_boolean_name(&id.name),
 
-    // SAFE: Boolean flags (is*, has*, can*, should*, will*, show*, hide*, enable*, disable*)
-    if is_boolean_identifier(trimmed) {
-        return false;
+        // Safe: comparisons
+        Expression::BinaryExpression(bin) => {
+            use oxc_syntax::operator::BinaryOperator;
+            matches!(
+                bin.operator,
+                BinaryOperator::StrictEquality
+                    | BinaryOperator::StrictInequality
+                    | BinaryOperator::Equality
+                    | BinaryOperator::Inequality
+                    | BinaryOperator::GreaterThan
+                    | BinaryOperator::LessThan
+                    | BinaryOperator::GreaterEqualThan
+                    | BinaryOperator::LessEqualThan
+            )
+        }
+
+        // Safe: negation
+        Expression::UnaryExpression(unary) => {
+            use oxc_syntax::operator::UnaryOperator;
+            matches!(unary.operator, UnaryOperator::LogicalNot)
+        }
+
+        // Safe: optional chaining
+        Expression::ChainExpression(_) => true,
+
+        // Check member expressions
+        Expression::StaticMemberExpression(static_mem) => is_boolean_name(&static_mem.property.name),
+        Expression::ComputedMemberExpression(_) => false,
+
+        _ => false,
     }
-
-    // SAFE: Comparison operators
-    if trimmed.contains('>') || trimmed.contains('<') || trimmed.contains('=') {
-        return false;
-    }
-
-    // SAFE: Negation (but not double negation - those need !! which is different)
-    if trimmed.starts_with('!') && !trimmed.starts_with("!!") {
-        return false;
-    }
-
-    // SAFE: Double negation !!
-    if trimmed.starts_with("!!") {
-        return false;
-    }
-
-    // SAFE: Optional chaining
-    if trimmed.contains("?.") {
-        return false;
-    }
-
-    // SAFE: Method calls with .
-    if trimmed.contains("?.") || trimmed.ends_with(')') && trimmed.contains('(') {
-        return false;
-    }
-
-    // UNSAFE: Bare identifier/property that could be falsy number/string/array
-    true
 }
 
-fn is_boolean_identifier(s: &str) -> bool {
-    let s_lower = s.to_lowercase();
+fn is_boolean_name(name: &str) -> bool {
     let prefixes = vec![
-        "is", "has", "can", "should", "will", "show", "hide", "enable", "disable",
+        "is", "has", "can", "should", "will", "show", "hide", "enable", "disable", "no",
     ];
-    prefixes.iter().any(|p| s.starts_with(p) && s.len() > p.len() && s.chars().nth(p.len()).unwrap().is_uppercase())
+
+    let suffixes = vec![
+        "enabled", "disabled", "active", "inactive", "visible", "hidden", "open", "closed",
+        "loading", "pending", "ready", "error", "success", "valid", "invalid",
+    ];
+
+    // Check prefixes - must have capital letter after prefix
+    for p in &prefixes {
+        if name.starts_with(p) && name.len() > p.len() {
+            if let Some(next_char) = name.chars().nth(p.len()) {
+                if next_char.is_uppercase() {
+                    return true;
+                }
+            }
+        }
+    }
+
+    // Check suffixes (case-insensitive)
+    // Must be at least prefix + suffix length to avoid single-word matches
+    let name_lower = name.to_lowercase();
+    for suffix in &suffixes {
+        if name_lower.ends_with(suffix) {
+            // Ensure there's something before the suffix (at least 2 chars)
+            if name_lower.len() > suffix.len() {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+fn get_line_col(offset: u32, content: &str) -> (u32, u32) {
+    let mut line = 1u32;
+    let mut col = 0u32;
+
+    for (i, ch) in content.chars().enumerate() {
+        if i >= offset as usize {
+            break;
+        }
+        if ch == '\n' {
+            line += 1;
+            col = 0;
+        } else {
+            col += 1;
+        }
+    }
+
+    (line, col)
 }
 
 fn check_flatmap_filter(
@@ -181,12 +258,9 @@ fn check_flatmap_filter(
     for (line_num, line) in lines.iter().enumerate() {
         let line_no = (line_num + 1) as u32;
 
-        // Pattern: .map(...).filter(Boolean) or .map(...).filter(x => x)
         if let Some(filter_pos) = line.find(".filter(") {
-            // Check if there's .map( before this
-            if let Some(map_pos) = line[..filter_pos].rfind(".map(") {
-                // Extract filter argument
-                let after_filter = &line[filter_pos + 8..]; // ".filter(" is 8 chars
+            if let Some(_map_pos) = line[..filter_pos].rfind(".map(") {
+                let after_filter = &line[filter_pos + 8..];
                 let filter_arg = extract_until_paren_close(after_filter);
 
                 if is_flatmap_filter_arg(&filter_arg) {
@@ -223,13 +297,10 @@ fn extract_until_paren_close(s: &str) -> String {
 
 fn is_flatmap_filter_arg(arg: &str) -> bool {
     let arg = arg.trim();
-    // Pattern: Boolean (the constructor) or x => x (identity function)
     arg == "Boolean"
         || arg == "x => x"
         || arg == "item => item"
         || arg == "el => el"
         || arg == "v => v"
         || arg == "a => a"
-        || arg.matches("=>").count() == 1
-            && arg.split("=>").last().map(|p| p.trim()) == Some("x")
 }
