@@ -1,4 +1,5 @@
 import js from '@eslint/js'
+import oxlint from 'eslint-plugin-oxlint'
 import globals from 'globals'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
@@ -20,4 +21,5 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  ...oxlint.configs['flat/recommended'],
 ])
