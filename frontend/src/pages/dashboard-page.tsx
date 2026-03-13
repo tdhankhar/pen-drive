@@ -2,7 +2,6 @@ import React from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { Badge } from "@/components/ui/badge";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -12,6 +11,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Folder, FileText, ArrowUp } from "lucide-react";
 import { UploadPanel } from "../components/upload-panel";
 import {
   getApiV1FilesOptions,
@@ -153,45 +153,57 @@ export function DashboardPage() {
         {error ? <p className="p-4 text-sm text-destructive">{(error as Error).message}</p> : null}
         {!isLoading && !error ? (
           <ul className="divide-y">
-            {listing?.entries?.length ? (
-              listing.entries.map((entry) => (
-                <li key={`${entry.type}:${entry.path}`}>
-                  <button
-                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/50 text-left disabled:opacity-50 disabled:cursor-default"
-                    disabled={entry.type !== "folder"}
-                    onClick={() => {
-                      if (entry.type === "folder" && entry.path) {
-                        openPath(entry.path);
-                      }
-                    }}
-                    type="button"
-                  >
-                    {entry.type === "folder" ? (
-                      <Badge variant="secondary" className="shrink-0">
-                        DIR
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="shrink-0">
-                        FILE
-                      </Badge>
-                    )}
-                    <span className="font-medium text-sm flex-1 truncate">
-                      {entry.name}
-                    </span>
-                    <span className="text-xs text-muted-foreground truncate max-w-xs">
-                      {entry.path}
-                    </span>
-                    <span className="text-xs text-muted-foreground shrink-0">
-                      {formatEntryMeta(entry)}
-                    </span>
-                  </button>
-                </li>
-              ))
-            ) : (
+            {currentPath ? (
+              <li key="go-up">
+                <button
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/50 text-left"
+                  onClick={() => openPath(segments.slice(0, -1).join("/"))}
+                  type="button"
+                >
+                  <ArrowUp className="w-5 h-5 text-muted-foreground shrink-0" />
+                  <span className="font-medium text-sm flex-1 truncate">
+                    ..
+                  </span>
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    Go up
+                  </span>
+                </button>
+              </li>
+            ) : null}
+            {listing?.entries?.map((entry) => (
+              <li key={`${entry.type}:${entry.path}`}>
+                <button
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/50 text-left disabled:opacity-50 disabled:cursor-default"
+                  disabled={entry.type !== "folder"}
+                  onClick={() => {
+                    if (entry.type === "folder" && entry.path) {
+                      openPath(entry.path);
+                    }
+                  }}
+                  type="button"
+                >
+                  {entry.type === "folder" ? (
+                    <Folder className="w-5 h-5 text-muted-foreground shrink-0" />
+                  ) : (
+                    <FileText className="w-5 h-5 text-muted-foreground shrink-0" />
+                  )}
+                  <span className="font-medium text-sm flex-1 truncate">
+                    {entry.name}
+                  </span>
+                  <span className="text-xs text-muted-foreground truncate max-w-xs">
+                    {entry.path}
+                  </span>
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    {formatEntryMeta(entry)}
+                  </span>
+                </button>
+              </li>
+            ))}
+            {!listing?.entries?.length ? (
               <li className="p-4 text-sm text-muted-foreground">
                 This folder is empty.
               </li>
-            )}
+            ) : null}
           </ul>
         ) : null}
       </section>
