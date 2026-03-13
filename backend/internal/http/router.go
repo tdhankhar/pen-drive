@@ -21,7 +21,7 @@ import (
 	_ "github.com/abhishek/pen-drive/backend/docs/openapi"
 )
 
-func NewRouter(logger *slog.Logger, dbConn *sql.DB, storageClient *storage.Client, jwtConfig config.JWTConfig) *gin.Engine {
+func NewRouter(logger *slog.Logger, dbConn *sql.DB, storageClient *storage.Client, jwtConfig config.JWTConfig, secureCookies bool) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 
 	router := gin.New()
@@ -29,10 +29,11 @@ func NewRouter(logger *slog.Logger, dbConn *sql.DB, storageClient *storage.Clien
 	router.Use(RequestLogger(logger))
 	router.Use(
 		cors.New(cors.Config{
-			AllowOrigins:  []string{"http://127.0.0.1:5173", "http://localhost:5173"},
-			AllowMethods:  []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-			AllowHeaders:  []string{"Origin", "Content-Type", "Accept", "Authorization"},
-			ExposeHeaders: []string{"X-Request-Id"},
+			AllowOrigins:     []string{"http://127.0.0.1:5173", "http://localhost:5173"},
+			AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+			AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+			ExposeHeaders:    []string{"X-Request-Id"},
+			AllowCredentials: true,
 		}),
 	)
 
@@ -41,7 +42,7 @@ func NewRouter(logger *slog.Logger, dbConn *sql.DB, storageClient *storage.Clien
 
 	userRepo := users.NewRepository(dbConn)
 	authService := auth.NewService(dbConn, userRepo, storageClient, jwtConfig)
-	authHandler := auth.NewHandler(authService)
+	authHandler := auth.NewHandler(authService, secureCookies)
 	filesService := files.NewService(storageClient)
 	filesHandler := files.NewHandler(filesService)
 

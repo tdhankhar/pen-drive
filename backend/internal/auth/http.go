@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/abhishek/pen-drive/backend/internal/api/dto"
 	"github.com/gin-gonic/gin"
@@ -11,10 +12,11 @@ import (
 
 type Handler struct {
 	service *Service
+	secure  bool
 }
 
-func NewHandler(service *Service) *Handler {
-	return &Handler{service: service}
+func NewHandler(service *Service, secure bool) *Handler {
+	return &Handler{service: service, secure: secure}
 }
 
 // Signup godoc
@@ -41,6 +43,7 @@ func (h *Handler) Signup(c *gin.Context) {
 		return
 	}
 
+	h.setRefreshCookie(c, tokens.RefreshToken, time.Until(tokens.RefreshTokenExpiresAt))
 	c.JSON(http.StatusCreated, toAuthResponse(user, tokens))
 }
 
@@ -75,30 +78,30 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 
+	h.setRefreshCookie(c, tokens.RefreshToken, time.Until(tokens.RefreshTokenExpiresAt))
 	c.JSON(http.StatusOK, toAuthResponse(user, tokens))
 }
 
 // Refresh godoc
 // @Summary Refresh tokens
-// @Description Rotate a refresh token and issue a new token pair.
+// @Description Rotate the refresh token cookie and issue a new access token.
 // @Tags auth
-// @Accept json
 // @Produce json
-// @Param payload body dto.RefreshRequest true "Refresh payload"
 // @Success 200 {object} dto.AuthResponse
-// @Failure 400 {object} dto.ErrorResponse
 // @Failure 401 {object} dto.ErrorResponse
 // @Failure 500 {object} dto.ErrorResponse
 // @Router /api/v1/auth/refresh [post]
 func (h *Handler) Refresh(c *gin.Context) {
-	var req dto.RefreshRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		respondError(c, http.StatusBadRequest, "invalid_request", "request body is invalid")
+	refreshToken, err := c.Cookie(refreshCookieName)
+	if err != nil || strings.TrimSpace(refreshToken) == "" {
+		h.clearRefreshCookie(c)
+		respondError(c, http.StatusUnauthorized, "missing_refresh_token", "refresh token cookie is required")
 		return
 	}
 
-	user, tokens, err := h.service.Refresh(c.Request.Context(), req.RefreshToken)
+	user, tokens, err := h.service.Refresh(c.Request.Context(), refreshToken)
 	if err != nil {
+		h.clearRefreshCookie(c)
 		status := http.StatusUnauthorized
 		code := "invalid_refresh_token"
 		if !errors.Is(err, ErrInvalidToken) {
@@ -109,6 +112,7 @@ func (h *Handler) Refresh(c *gin.Context) {
 		return
 	}
 
+	h.setRefreshCookie(c, tokens.RefreshToken, time.Until(tokens.RefreshTokenExpiresAt))
 	c.JSON(http.StatusOK, toAuthResponse(user, tokens))
 }
 
@@ -177,9 +181,24 @@ func signupCode(err error) string {
 }
 
 const (
+	refreshCookieName   = "refresh_token"
+	refreshCookiePath   = "/api/v1/auth/refresh"
 	userIDContextKey    = "auth.user_id"
 	userEmailContextKey = "auth.user_email"
 )
+
+func (h *Handler) setRefreshCookie(c *gin.Context, token string, ttl time.Duration) {
+	maxAge := int(ttl.Seconds())
+	if maxAge < 0 {
+		maxAge = 0
+	}
+
+	c.SetCookie(refreshCookieName, token, maxAge, refreshCookiePath, "", h.secure, true)
+}
+
+func (h *Handler) clearRefreshCookie(c *gin.Context) {
+	c.SetCookie(refreshCookieName, "", -1, refreshCookiePath, "", h.secure, true)
+}
 
 func respondError(c *gin.Context, status int, code, message string) {
 	c.JSON(status, dto.ErrorResponse{
@@ -197,10 +216,8 @@ func toAuthResponse(user AuthenticatedUser, tokens TokenPair) dto.AuthResponse {
 			Email: user.Email,
 		},
 		Tokens: dto.TokenPair{
-			AccessToken:           tokens.AccessToken,
-			AccessTokenExpiresAt:  tokens.AccessTokenExpiresAt.UTC().Format(http.TimeFormat),
-			RefreshToken:          tokens.RefreshToken,
-			RefreshTokenExpiresAt: tokens.RefreshTokenExpiresAt.UTC().Format(http.TimeFormat),
+			AccessToken:          tokens.AccessToken,
+			AccessTokenExpiresAt: tokens.AccessTokenExpiresAt.UTC().Format(http.TimeFormat),
 		},
 	}
 }

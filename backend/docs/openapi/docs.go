@@ -69,10 +69,7 @@ const docTemplate = `{
         },
         "/api/v1/auth/refresh": {
             "post": {
-                "description": "Rotate a refresh token and issue a new token pair.",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "Rotate the refresh token cookie and issue a new access token.",
                 "produces": [
                     "application/json"
                 ],
@@ -80,28 +77,11 @@ const docTemplate = `{
                     "auth"
                 ],
                 "summary": "Refresh tokens",
-                "parameters": [
-                    {
-                        "description": "Refresh payload",
-                        "name": "payload",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.RefreshRequest"
-                        }
-                    }
-                ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.AuthResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
                         }
                     },
                     "401": {
@@ -1040,15 +1020,6 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_abhishek_pen-drive_backend_internal_api_dto.RefreshRequest": {
-            "type": "object",
-            "properties": {
-                "refresh_token": {
-                    "type": "string",
-                    "example": "refresh-token"
-                }
-            }
-        },
         "github_com_abhishek_pen-drive_backend_internal_api_dto.TokenPair": {
             "type": "object",
             "properties": {
@@ -1059,14 +1030,6 @@ const docTemplate = `{
                 "access_token_expires_at": {
                     "type": "string",
                     "example": "2026-03-12T16:00:00Z"
-                },
-                "refresh_token": {
-                    "type": "string",
-                    "example": "opaque-refresh-token"
-                },
-                "refresh_token_expires_at": {
-                    "type": "string",
-                    "example": "2026-04-11T16:00:00Z"
                 }
             }
         },

@@ -215,12 +215,6 @@ definitions:
         example: 1
         type: integer
     type: object
-  github_com_abhishek_pen-drive_backend_internal_api_dto.RefreshRequest:
-    properties:
-      refresh_token:
-        example: refresh-token
-        type: string
-    type: object
   github_com_abhishek_pen-drive_backend_internal_api_dto.TokenPair:
     properties:
       access_token:
@@ -228,12 +222,6 @@ definitions:
         type: string
       access_token_expires_at:
         example: "2026-03-12T16:00:00Z"
-        type: string
-      refresh_token:
-        example: opaque-refresh-token
-        type: string
-      refresh_token_expires_at:
-        example: "2026-04-11T16:00:00Z"
         type: string
     type: object
   github_com_abhishek_pen-drive_backend_internal_api_dto.UploadedFileInfo:
@@ -293,16 +281,7 @@ paths:
       - auth
   /api/v1/auth/refresh:
     post:
-      consumes:
-      - application/json
-      description: Rotate a refresh token and issue a new token pair.
-      parameters:
-      - description: Refresh payload
-        in: body
-        name: payload
-        required: true
-        schema:
-          $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.RefreshRequest'
+      description: Rotate the refresh token cookie and issue a new access token.
       produces:
       - application/json
       responses:
@@ -310,10 +289,6 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.AuthResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
