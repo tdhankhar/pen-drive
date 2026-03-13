@@ -6,3 +6,5 @@ slate.json
 .factory/
 
 
+.beads/beads.db
+.beads/docs/

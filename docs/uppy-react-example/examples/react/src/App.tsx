@@ -1,0 +1,115 @@
+/** biome-ignore-all lint/nursery/useUniqueElementIds: it's fine */
+import Uppy, { type UppyFile } from '@uppy/core'
+import UppyImageEditor from '@uppy/image-editor'
+import {
+  Dropzone,
+  FilesGrid,
+  FilesList,
+  UploadButton,
+  UppyContextProvider,
+} from '@uppy/react'
+import UppyRemoteSources from '@uppy/remote-sources'
+import UppyScreenCapture from '@uppy/screen-capture'
+import Tus from '@uppy/tus'
+import UppyWebcam from '@uppy/webcam'
+import { useRef, useState } from 'react'
+import CustomDropzone from './CustomDropzone'
+import ImageEditor from './ImageEditor'
+import { RemoteSource } from './RemoteSource'
+import ScreenCapture from './ScreenCapture'
+import Webcam from './Webcam'
+
+import './app.css'
+import '@uppy/react/css/style.css'
+import '@uppy/react/css/image-editor.css'
+
+function App() {
+  const [uppy] = useState(() =>
+    new Uppy()
+      .use(Tus, {
+        endpoint: 'https://tusd.tusdemo.net/files/',
+      })
+      .use(UppyWebcam)
+      .use(UppyScreenCapture)
+      .use(UppyImageEditor)
+      .use(UppyRemoteSources, { companionUrl: 'http://localhost:3020' }),
+  )
+
+  const dialogRef = useRef<HTMLDialogElement>(null)
+  const [modalPlugin, setModalPlugin] = useState<
+    'webcam' | 'dropbox' | 'screen-capture' | 'image-editor' | null
+  >(null)
+  const [selectedFile, setSelectedFile] = useState<UppyFile<any, any> | null>(
+    null,
+  )
+
+  function openModal(plugin: 'webcam' | 'dropbox' | 'screen-capture') {
+    setModalPlugin(plugin)
+    dialogRef.current?.showModal()
+  }
+
+  function openImageEditorModal(file: UppyFile<any, any>) {
+    // https://github.com/transloadit/uppy/issues/6148
+    if (!file.type.startsWith('image/')) return
+    setSelectedFile(file)
+    setModalPlugin('image-editor')
+    dialogRef.current?.showModal()
+  }
+
+  function closeModal() {
+    setModalPlugin(null)
+    setSelectedFile(null)
+    dialogRef.current?.close()
+  }
+
+  return (
+    <UppyContextProvider uppy={uppy}>
+      <main className="p-5 max-w-xl mx-auto">
+        <h1 className="text-4xl font-bold my-4">Welcome to React.</h1>
+
+        <UploadButton />
+
+        <dialog
+          ref={dialogRef}
+          className="backdrop:bg-gray-500/50 rounded-lg shadow-xl p-0 fixed inset-0 m-auto"
+        >
+          {(() => {
+            switch (modalPlugin) {
+              case 'webcam':
+                return <Webcam close={() => closeModal()} />
+              case 'dropbox':
+                return <RemoteSource id="Dropbox" close={() => closeModal()} />
+              case 'screen-capture':
+                return <ScreenCapture close={() => closeModal()} />
+              case 'image-editor':
+                return selectedFile ? (
+                  <ImageEditor file={selectedFile} close={() => closeModal()} />
+                ) : null
+              default:
+                return null
+            }
+          })()}
+        </dialog>
+
+        <article>
+          <h2 className="text-2xl my-4">With list</h2>
+          <Dropzone />
+          <FilesList editFile={openImageEditorModal} />
+        </article>
+
+        <article>
+          <h2 className="text-2xl my-4">With grid</h2>
+          <Dropzone />
+          <FilesGrid columns={2} editFile={openImageEditorModal} />
+        </article>
+
+        <article>
+          <h2 className="text-2xl my-4">With custom dropzone</h2>
+          <CustomDropzone openModal={(plugin) => openModal(plugin)} />
+        </article>
+      </main>
+    </UppyContextProvider>
+  )
+}
+
+export default App

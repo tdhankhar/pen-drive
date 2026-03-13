@@ -1,0 +1,5 @@
+{"event_id":"01KKJGRVYFXY6AV9K2MGY62JQE","ts":"2026-03-13T02:35:23.471Z","op":"create","id":"pd-001","actor":"abhishek","data":{"kind":"task","priority":1,"status":"open","title":" phase 5 docs/work/2026-03-13-11-20-00-uppy-migration-plan.mda"}}
+{"event_id":"01KKJGT0B54CX96QBW3K4NDTPY","ts":"2026-03-13T02:36:00.741Z","op":"create","id":"pd-002","actor":"abhishek","data":{"kind":"task","priority":1,"status":"open","title":"pre-commit prek - trigger frontend format only if certain frontend files are in staging and format only those files. "}}
+{"event_id":"01KKJGX84REREVMJZXGW29Y6VS","ts":"2026-03-13T02:37:47.032Z","op":"create","id":"pd-003","actor":"abhishek","data":{"kind":"task","priority":1,"status":"open","title":"for each file - show the presigend url -- so that user can download the file"}}
+{"event_id":"01KKJH6BFJGE1VK7C4TH7XR7RX","ts":"2026-03-13T02:42:45.362Z","op":"update","id":"pd-003","actor":"abhishek","data":{"status":"in-progress"}}
+{"event_id":"01KKJHZ6KX0FD42PFKCDT0RNE9","ts":"2026-03-13T02:56:19.581Z","op":"update","id":"pd-003","actor":"abhishek","data":{"status":"closed"}}
