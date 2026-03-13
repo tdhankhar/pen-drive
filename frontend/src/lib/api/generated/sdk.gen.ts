@@ -35,16 +35,9 @@ export const postApiV1AuthLogin = <ThrowOnError extends boolean = false>(options
 /**
  * Refresh tokens
  *
- * Rotate a refresh token and issue a new token pair.
+ * Rotate the refresh token cookie and issue a new access token.
  */
-export const postApiV1AuthRefresh = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AuthRefreshData, ThrowOnError>) => (options.client ?? client).post<PostApiV1AuthRefreshResponses, PostApiV1AuthRefreshErrors, ThrowOnError>({
-    url: '/api/v1/auth/refresh',
-    ...options,
-    headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-    }
-});
+export const postApiV1AuthRefresh = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1AuthRefreshData, ThrowOnError>) => (options?.client ?? client).post<PostApiV1AuthRefreshResponses, PostApiV1AuthRefreshErrors, ThrowOnError>({ url: '/api/v1/auth/refresh', ...options });
 
 /**
  * Sign up

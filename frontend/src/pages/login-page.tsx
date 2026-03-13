@@ -4,7 +4,9 @@ import { AuthForm } from "../components/auth-form";
 import { useAuth } from "../lib/use-auth";
 
 export function LoginPage() {
-  const auth = useAuth();
+  const {
+    actions: { login },
+  } = useAuth();
   const navigate = useNavigate();
 
   return (
@@ -13,15 +15,15 @@ export function LoginPage() {
         <p className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Access</p>
         <h2>Sign in to your storage workspace.</h2>
         <p>
-          Your session uses local storage for now so development stays simple.
-          Secure cookie transport is tracked as a follow-up.
+          Access tokens stay in local storage while refresh stays in a secure
+          HTTP-only cookie.
         </p>
       </div>
 
       <div className="max-w-sm w-full">
         <AuthForm
           onSubmit={async (credentials) => {
-            await auth.login(credentials);
+            await login(credentials);
             await navigate("/app");
           }}
           submitLabel="Log in"

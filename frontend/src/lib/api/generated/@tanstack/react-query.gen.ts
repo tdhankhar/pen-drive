@@ -28,7 +28,7 @@ export const postApiV1AuthLoginMutation = (options?: Partial<Options<PostApiV1Au
 /**
  * Refresh tokens
  *
- * Rotate a refresh token and issue a new token pair.
+ * Rotate the refresh token cookie and issue a new access token.
  */
 export const postApiV1AuthRefreshMutation = (options?: Partial<Options<PostApiV1AuthRefreshData>>): UseMutationOptions<PostApiV1AuthRefreshResponse, PostApiV1AuthRefreshError, Options<PostApiV1AuthRefreshData>> => {
     const mutationOptions: UseMutationOptions<PostApiV1AuthRefreshResponse, PostApiV1AuthRefreshError, Options<PostApiV1AuthRefreshData>> = {

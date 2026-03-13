@@ -123,15 +123,9 @@ export type GithubComAbhishekPenDriveBackendInternalApiDtoMultipartUploadPartRes
     part_number?: number;
 };
 
-export type GithubComAbhishekPenDriveBackendInternalApiDtoRefreshRequest = {
-    refresh_token?: string;
-};
-
 export type GithubComAbhishekPenDriveBackendInternalApiDtoTokenPair = {
     access_token?: string;
     access_token_expires_at?: string;
-    refresh_token?: string;
-    refresh_token_expires_at?: string;
 };
 
 export type GithubComAbhishekPenDriveBackendInternalApiDtoUploadedFileInfo = {
@@ -178,20 +172,13 @@ export type PostApiV1AuthLoginResponses = {
 export type PostApiV1AuthLoginResponse = PostApiV1AuthLoginResponses[keyof PostApiV1AuthLoginResponses];
 
 export type PostApiV1AuthRefreshData = {
-    /**
-     * Refresh payload
-     */
-    body: GithubComAbhishekPenDriveBackendInternalApiDtoRefreshRequest;
+    body?: never;
     path?: never;
     query?: never;
     url: '/api/v1/auth/refresh';
 };
 
 export type PostApiV1AuthRefreshErrors = {
-    /**
-     * Bad Request
-     */
-    400: GithubComAbhishekPenDriveBackendInternalApiDtoErrorResponse;
     /**
      * Unauthorized
      */

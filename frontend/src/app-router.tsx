@@ -6,13 +6,15 @@ import { LoginPage } from "./pages/login-page";
 import { SignupPage } from "./pages/signup-page";
 
 function ProtectedLayout() {
-  const auth = useAuth();
+  const {
+    state: { isLoading, session },
+  } = useAuth();
 
-  if (auth.isLoading) {
+  if (isLoading) {
     return <div className="grid min-h-screen place-items-center text-muted-foreground">Restoring session...</div>;
   }
 
-  if (!auth.session) {
+  if (!session) {
     return <Navigate replace to="/login" />;
   }
 
@@ -20,13 +22,15 @@ function ProtectedLayout() {
 }
 
 function PublicLayout() {
-  const auth = useAuth();
+  const {
+    state: { isLoading, session },
+  } = useAuth();
 
-  if (auth.isLoading) {
+  if (isLoading) {
     return <div className="grid min-h-screen place-items-center text-muted-foreground">Restoring session...</div>;
   }
 
-  if (auth.session) {
+  if (session) {
     return <Navigate replace to="/app" />;
   }
 

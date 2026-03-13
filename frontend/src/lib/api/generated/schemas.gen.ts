@@ -332,16 +332,6 @@ export const github_com_abhishek_pen_drive_backend_internal_api_dto_MultipartUpl
     }
 } as const;
 
-export const github_com_abhishek_pen_drive_backend_internal_api_dto_RefreshRequestSchema = {
-    type: 'object',
-    properties: {
-        refresh_token: {
-            type: 'string',
-            example: 'refresh-token'
-        }
-    }
-} as const;
-
 export const github_com_abhishek_pen_drive_backend_internal_api_dto_TokenPairSchema = {
     type: 'object',
     properties: {
@@ -352,14 +342,6 @@ export const github_com_abhishek_pen_drive_backend_internal_api_dto_TokenPairSch
         access_token_expires_at: {
             type: 'string',
             example: '2026-03-12T16:00:00Z'
-        },
-        refresh_token: {
-            type: 'string',
-            example: 'opaque-refresh-token'
-        },
-        refresh_token_expires_at: {
-            type: 'string',
-            example: '2026-04-11T16:00:00Z'
         }
     }
 } as const;

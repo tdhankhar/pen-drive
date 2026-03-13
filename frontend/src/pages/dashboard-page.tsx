@@ -20,11 +20,15 @@ import {
 import type {
   GithubComAbhishekPenDriveBackendInternalApiDtoFileSystemEntry,
 } from "../lib/api/generated";
+import { apiClient } from "../lib/api/http";
 import { useAuth } from "../lib/use-auth";
+
 export function DashboardPage() {
-  const auth = useAuth();
+  const {
+    state: { session },
+    actions: { logout },
+  } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const session = auth.session;
   const currentPath = searchParams.get("path") ?? "";
   const segments = currentPath.split("/").filter(Boolean);
 
@@ -32,6 +36,7 @@ export function DashboardPage() {
 
   const { data: listing, isLoading, error } = useQuery({
     ...getApiV1FilesOptions({
+      client: apiClient,
       query: currentPath ? { path: currentPath } : undefined,
     }),
     enabled: !!session,
@@ -61,7 +66,7 @@ export function DashboardPage() {
             User bucket name: <code>{session.user.id}</code>
           </p>
         </div>
-        <Button variant="outline" onClick={auth.logout} type="button">
+        <Button variant="outline" onClick={logout} type="button">
           Log out
         </Button>
       </header>
@@ -133,7 +138,11 @@ export function DashboardPage() {
 
       <UploadPanel
         currentPath={currentPath}
-        onUploaded={() => queryClient.invalidateQueries({ queryKey: getApiV1FilesQueryKey() })}
+        onUploaded={() =>
+          queryClient.invalidateQueries({
+            queryKey: getApiV1FilesQueryKey({ client: apiClient }),
+          })
+        }
       />
       <section className="rounded-lg border bg-card">
         {isLoading ? (

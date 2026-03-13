@@ -42,7 +42,7 @@ import type {
   PostApiV1FilesUploadData,
 } from "../lib/api/generated";
 import { apiClient } from "../lib/api/http";
-import { readSession } from "../lib/session";
+import { getSessionSnapshot } from "../lib/session";
 
 const MULTIPART_THRESHOLD_BYTES = 5 * 1024 * 1024;
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8080";
@@ -582,7 +582,7 @@ function isMultipartEligible(file: UppyFile<UploadMeta, UploadBody>) {
 }
 
 function authHeaders(): { Authorization: string } {
-  const session = readSession();
+  const session = getSessionSnapshot();
   if (!session?.accessToken) {
     throw new Error("missing access token");
   }

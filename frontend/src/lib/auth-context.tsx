@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import {
   clearSession,
+  getSessionSnapshot,
   login as loginRequest,
   readSession,
   restoreSession,
@@ -17,12 +18,25 @@ type Credentials = {
   password: string;
 };
 
-type AuthContextValue = {
+type AuthState = {
   isLoading: boolean;
   session: SessionState | null;
+};
+
+type AuthActions = {
   login: (credentials: Credentials) => Promise<void>;
   signup: (credentials: Credentials) => Promise<void>;
   logout: () => void;
+};
+
+type AuthMeta = {
+  isAuthenticated: boolean;
+};
+
+type AuthContextValue = {
+  state: AuthState;
+  actions: AuthActions;
+  meta: AuthMeta;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -33,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { isLoading } = useQuery({
     queryKey: ["session-restore"],
     queryFn: async () => {
-      const existing = readSession();
+      const existing = getSessionSnapshot();
       if (!existing) return null;
       try {
         const restored = await restoreSession();
@@ -51,19 +65,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   const value: AuthContextValue = {
-    isLoading,
-    session,
-    async login(credentials) {
-      const nextSession = await loginRequest(credentials);
-      setSession(nextSession);
+    state: {
+      isLoading,
+      session,
     },
-    async signup(credentials) {
-      const nextSession = await signupRequest(credentials);
-      setSession(nextSession);
+    actions: {
+      async login(credentials) {
+        const nextSession = await loginRequest(credentials);
+        setSession(nextSession);
+      },
+      async signup(credentials) {
+        const nextSession = await signupRequest(credentials);
+        setSession(nextSession);
+      },
+      logout() {
+        clearSession();
+        setSession(null);
+      },
     },
-    logout() {
-      clearSession();
-      setSession(null);
+    meta: {
+      isAuthenticated: Boolean(session),
     },
   };
 
@@ -71,3 +92,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 export { AuthContext };
+export type { AuthActions, AuthContextValue, AuthMeta, AuthState, Credentials };

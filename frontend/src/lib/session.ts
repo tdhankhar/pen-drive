@@ -12,40 +12,52 @@ import { apiClient } from "./api/http";
 
 type SessionState = {
   accessToken: string;
-  refreshToken: string;
   user: GithubComAbhishekPenDriveBackendInternalApiDtoAuthenticatedUser;
 };
 
 type AuthPayload = {
   tokens?: {
     access_token?: string;
-    refresh_token?: string;
   };
   user?: GithubComAbhishekPenDriveBackendInternalApiDtoAuthenticatedUser;
 };
 
 const sessionStorageKey = "pen-drive.session";
+let cachedSession: SessionState | null | undefined;
 
-// TODO: move refresh token transport to secure HTTP-only cookies.
 export function readSession(): SessionState | null {
   const raw = window.localStorage.getItem(sessionStorageKey);
   if (!raw) {
+    cachedSession = null;
     return null;
   }
 
   try {
-    return JSON.parse(raw) as SessionState;
+    const session = JSON.parse(raw) as SessionState;
+    cachedSession = session;
+    return session;
   } catch {
     window.localStorage.removeItem(sessionStorageKey);
+    cachedSession = null;
     return null;
   }
 }
 
+export function getSessionSnapshot(): SessionState | null {
+  if (cachedSession !== undefined) {
+    return cachedSession;
+  }
+
+  return readSession();
+}
+
 export function writeSession(session: SessionState) {
+  cachedSession = session;
   window.localStorage.setItem(sessionStorageKey, JSON.stringify(session));
 }
 
 export function clearSession() {
+  cachedSession = null;
   window.localStorage.removeItem(sessionStorageKey);
 }
 
@@ -81,12 +93,9 @@ export async function login(
   return session;
 }
 
-export async function refreshSession(
-  currentRefreshToken: string,
-): Promise<SessionState> {
+export async function refreshSession(): Promise<SessionState> {
   const { data: refreshData, error: refreshError } = await postApiV1AuthRefresh({
     client: apiClient,
-    body: { refresh_token: currentRefreshToken },
   });
 
   if (refreshError) {
@@ -120,26 +129,21 @@ export async function refreshSession(
 }
 
 export async function restoreSession(): Promise<SessionState | null> {
-  const current = readSession();
+  const current = getSessionSnapshot();
   if (!current) {
     return null;
   }
 
-  return refreshSession(current.refreshToken);
+  return refreshSession();
 }
 
 function toSessionState(response: AuthPayload): SessionState {
-  if (
-    !response.user ||
-    !response.tokens?.access_token ||
-    !response.tokens.refresh_token
-  ) {
+  if (!response.user || !response.tokens?.access_token) {
     throw new Error("response payload is incomplete");
   }
 
   return {
     accessToken: response.tokens.access_token,
-    refreshToken: response.tokens.refresh_token,
     user: response.user,
   };
 }

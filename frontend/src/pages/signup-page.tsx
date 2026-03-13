@@ -4,7 +4,9 @@ import { AuthForm } from "../components/auth-form";
 import { useAuth } from "../lib/use-auth";
 
 export function SignupPage() {
-  const auth = useAuth();
+  const {
+    actions: { signup },
+  } = useAuth();
   const navigate = useNavigate();
 
   return (
@@ -21,7 +23,7 @@ export function SignupPage() {
       <div className="max-w-sm w-full">
         <AuthForm
           onSubmit={async (credentials) => {
-            await auth.signup(credentials);
+            await signup(credentials);
             await navigate("/app");
           }}
           submitLabel="Create account"
