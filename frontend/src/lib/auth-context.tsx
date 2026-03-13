@@ -11,6 +11,7 @@ import {
   restoreSession,
   signup as signupRequest,
   type SessionState,
+  writeSession,
 } from "./session";
 
 type Credentials = {
@@ -44,6 +45,11 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<SessionState | null>(() => readSession());
 
+  function applySession(nextSession: SessionState) {
+    writeSession(nextSession);
+    setSession(nextSession);
+  }
+
   const { isLoading } = useQuery({
     queryKey: ["session-restore"],
     queryFn: async () => {
@@ -51,7 +57,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!existing) return null;
       try {
         const restored = await restoreSession();
-        setSession(restored);
+        if (restored) {
+          applySession(restored);
+        } else {
+          setSession(null);
+        }
         return restored;
       } catch {
         clearSession();
@@ -72,11 +82,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     actions: {
       async login(credentials) {
         const nextSession = await loginRequest(credentials);
-        setSession(nextSession);
+        applySession(nextSession);
       },
       async signup(credentials) {
         const nextSession = await signupRequest(credentials);
-        setSession(nextSession);
+        applySession(nextSession);
       },
       logout() {
         clearSession();
