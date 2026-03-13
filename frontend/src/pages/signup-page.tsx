@@ -4,13 +4,15 @@ import { AuthForm } from "../components/auth-form";
 import { useAuth } from "../lib/use-auth";
 
 export function SignupPage() {
-  const auth = useAuth();
+  const {
+    actions: { signup },
+  } = useAuth();
   const navigate = useNavigate();
 
   return (
-    <section className="auth-layout">
-      <div className="auth-panel auth-panel-copy">
-        <p className="eyebrow">Provisioning</p>
+    <section className="min-h-screen flex flex-col md:flex-row items-center justify-center gap-8 p-8">
+      <div className="max-w-sm space-y-3">
+        <p className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Provisioning</p>
         <h2>Create your account and bucket in one step.</h2>
         <p>
           Signup provisions a per-user storage bucket through the backend and
@@ -18,17 +20,17 @@ export function SignupPage() {
         </p>
       </div>
 
-      <div className="auth-panel">
+      <div className="max-w-sm w-full">
         <AuthForm
           onSubmit={async (credentials) => {
-            await auth.signup(credentials);
+            await signup(credentials);
             await navigate("/app");
           }}
           submitLabel="Create account"
           subtitle="Use a real email shape and an 8+ character password."
           title="Start a workspace"
         />
-        <p className="auth-footer">
+        <p className="mt-4 text-sm text-center text-muted-foreground">
           Already registered? <Link to="/login">Log in</Link>
         </p>
       </div>

@@ -1,19 +1,17 @@
-import {
-  createContext,
-  startTransition,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { createContext, useState } from "react";
 import type { ReactNode } from "react";
+
+import { useQuery } from "@tanstack/react-query";
 
 import {
   clearSession,
+  getSessionSnapshot,
   login as loginRequest,
   readSession,
   restoreSession,
   signup as signupRequest,
   type SessionState,
+  writeSession,
 } from "./session";
 
 type Credentials = {
@@ -21,76 +19,82 @@ type Credentials = {
   password: string;
 };
 
-type AuthContextValue = {
+type AuthState = {
   isLoading: boolean;
   session: SessionState | null;
+};
+
+type AuthActions = {
   login: (credentials: Credentials) => Promise<void>;
   signup: (credentials: Credentials) => Promise<void>;
   logout: () => void;
+};
+
+type AuthMeta = {
+  isAuthenticated: boolean;
+};
+
+type AuthContextValue = {
+  state: AuthState;
+  actions: AuthActions;
+  meta: AuthMeta;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<SessionState | null>(() => readSession());
-  const [isLoading, setIsLoading] = useState(true);
-  const hasBootstrapped = useRef(false);
 
-  useEffect(() => {
-    if (hasBootstrapped.current) {
-      return;
-    }
+  function applySession(nextSession: SessionState) {
+    writeSession(nextSession);
+    setSession(nextSession);
+  }
 
-    hasBootstrapped.current = true;
-    let cancelled = false;
-
-    const bootstrap = async () => {
-      const existing = readSession();
-      if (!existing) {
-        setIsLoading(false);
-        return;
-      }
-
+  const { isLoading } = useQuery({
+    queryKey: ["session-restore"],
+    queryFn: async () => {
+      const existing = getSessionSnapshot();
+      if (!existing) return null;
       try {
         const restored = await restoreSession();
-        if (!cancelled) {
-          startTransition(() => {
-            setSession(restored);
-            setIsLoading(false);
-          });
+        if (restored) {
+          applySession(restored);
+        } else {
+          setSession(null);
         }
+        return restored;
       } catch {
-        if (!cancelled) {
-          clearSession();
-          startTransition(() => {
-            setSession(null);
-            setIsLoading(false);
-          });
-        }
+        clearSession();
+        setSession(null);
+        return null;
       }
-    };
-
-    void bootstrap();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    },
+    staleTime: Infinity,
+    gcTime: 0,
+    retry: false,
+  });
 
   const value: AuthContextValue = {
-    isLoading,
-    session,
-    async login(credentials) {
-      const nextSession = await loginRequest(credentials);
-      setSession(nextSession);
+    state: {
+      isLoading,
+      session,
     },
-    async signup(credentials) {
-      const nextSession = await signupRequest(credentials);
-      setSession(nextSession);
+    actions: {
+      async login(credentials) {
+        const nextSession = await loginRequest(credentials);
+        applySession(nextSession);
+      },
+      async signup(credentials) {
+        const nextSession = await signupRequest(credentials);
+        applySession(nextSession);
+      },
+      logout() {
+        clearSession();
+        setSession(null);
+      },
     },
-    logout() {
-      clearSession();
-      setSession(null);
+    meta: {
+      isAuthenticated: Boolean(session),
     },
   };
 
@@ -98,3 +102,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 export { AuthContext };
+export type { AuthActions, AuthContextValue, AuthMeta, AuthState, Credentials };

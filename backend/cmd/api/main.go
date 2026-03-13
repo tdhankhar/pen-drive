@@ -53,7 +53,7 @@ func main() {
 		return
 	}
 
-	router := apphttp.NewRouter(logger, dbConn, storageClient, cfg.JWT)
+	router := apphttp.NewRouter(logger, dbConn, storageClient, cfg.JWT, cfg.AppEnv == "production")
 
 	server := &http.Server{
 		Addr:              cfg.HTTP.Address(),

@@ -66,10 +66,7 @@
         },
         "/api/v1/auth/refresh": {
             "post": {
-                "description": "Rotate a refresh token and issue a new token pair.",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "Rotate the refresh token cookie and issue a new access token.",
                 "produces": [
                     "application/json"
                 ],
@@ -77,28 +74,11 @@
                     "auth"
                 ],
                 "summary": "Refresh tokens",
-                "parameters": [
-                    {
-                        "description": "Refresh payload",
-                        "name": "payload",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.RefreshRequest"
-                        }
-                    }
-                ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.AuthResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
                         }
                     },
                     "401": {
@@ -212,6 +192,69 @@
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Soft-delete a file or folder tree by moving the object(s) to trash/\u003coriginal-path\u003e",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "files"
+                ],
+                "summary": "Delete file or folder",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Relative file or folder path",
+                        "name": "path",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Entry type: file or folder",
+                        "name": "type",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.DeleteResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/github_com_abhishek_pen-drive_backend_internal_api_dto.ErrorResponse"
                         }
@@ -761,6 +804,20 @@
                 }
             }
         },
+        "github_com_abhishek_pen-drive_backend_internal_api_dto.DeleteResponse": {
+            "type": "object",
+            "properties": {
+                "deleted_paths": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "docs/report.pdf"
+                    ]
+                }
+            }
+        },
         "github_com_abhishek_pen-drive_backend_internal_api_dto.DuplicateConflictPolicy": {
             "type": "string",
             "enum": [
@@ -900,6 +957,10 @@
                     "type": "string",
                     "example": "photos/photo.jpg"
                 },
+                "presigned_url": {
+                    "type": "string",
+                    "example": "https://s3.example.com/..."
+                },
                 "size": {
                     "type": "integer",
                     "example": 2048
@@ -1037,15 +1098,6 @@
                 }
             }
         },
-        "github_com_abhishek_pen-drive_backend_internal_api_dto.RefreshRequest": {
-            "type": "object",
-            "properties": {
-                "refresh_token": {
-                    "type": "string",
-                    "example": "refresh-token"
-                }
-            }
-        },
         "github_com_abhishek_pen-drive_backend_internal_api_dto.TokenPair": {
             "type": "object",
             "properties": {
@@ -1056,14 +1108,6 @@
                 "access_token_expires_at": {
                     "type": "string",
                     "example": "2026-03-12T16:00:00Z"
-                },
-                "refresh_token": {
-                    "type": "string",
-                    "example": "opaque-refresh-token"
-                },
-                "refresh_token_expires_at": {
-                    "type": "string",
-                    "example": "2026-04-11T16:00:00Z"
                 }
             }
         },

@@ -1,73 +1,50 @@
-import { useEffect, useState } from "react";
+import React from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Folder, FileText, ArrowUp, Trash2, Download } from "lucide-react";
 import { UploadPanel } from "../components/upload-panel";
-import { getApiV1Files } from "../lib/api/generated/client";
+import { deleteApiV1Files } from "../lib/api/generated";
+import {
+  getApiV1FilesOptions,
+  getApiV1FilesQueryKey,
+} from "../lib/api/generated/@tanstack/react-query.gen";
 import type {
-  GithubComAbhishekPenDriveBackendInternalApiDtoFileListResponse,
   GithubComAbhishekPenDriveBackendInternalApiDtoFileSystemEntry,
-} from "../lib/api/generated/model";
+} from "../lib/api/generated";
+import { apiClient } from "../lib/api/http";
 import { useAuth } from "../lib/use-auth";
+import { formatBytes } from "../lib/utils";
 
 export function DashboardPage() {
-  const auth = useAuth();
+  const {
+    state: { session },
+    actions: { logout },
+  } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [listing, setListing] =
-    useState<GithubComAbhishekPenDriveBackendInternalApiDtoFileListResponse | null>(
-      null,
-    );
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const session = auth.session;
   const currentPath = searchParams.get("path") ?? "";
   const segments = currentPath.split("/").filter(Boolean);
+  const [deleteError, setDeleteError] = React.useState<string | null>(null);
+  const [deletingPath, setDeletingPath] = React.useState<string | null>(null);
 
-  async function loadListing(activePath: string, accessToken: string) {
-    setIsLoading(true);
-    setError(null);
+  const queryClient = useQueryClient();
 
-    const response = await getApiV1Files(
-      activePath ? { path: activePath } : undefined,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      },
-    );
-
-    if (response.status !== 200) {
-      setError(response.data.error?.message ?? "listing failed");
-      setListing(null);
-      setIsLoading(false);
-      return;
-    }
-
-    setListing(response.data);
-    setIsLoading(false);
-  }
-
-  useEffect(() => {
-    if (!session) {
-      return;
-    }
-
-    let cancelled = false;
-
-    const load = async () => {
-      if (cancelled) {
-        return;
-      }
-
-      await loadListing(currentPath, session.accessToken);
-    };
-
-    void load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentPath, session]);
-
+  const { data: listing, isLoading, error } = useQuery({
+    ...getApiV1FilesOptions({
+      client: apiClient,
+      query: currentPath ? { path: currentPath } : undefined,
+    }),
+    enabled: !!session,
+  });
   if (!session) {
     return <Navigate replace to="/login" />;
   }
@@ -81,80 +58,168 @@ export function DashboardPage() {
     setSearchParams({});
   }
 
+  async function refreshListing() {
+    await queryClient.invalidateQueries({
+      queryKey: getApiV1FilesQueryKey({ client: apiClient }),
+    });
+  }
+
+  async function handleDelete(entry: GithubComAbhishekPenDriveBackendInternalApiDtoFileSystemEntry) {
+    if (!entry.path || !entry.type) {
+      return;
+    }
+
+    const label = entry.type === "folder" ? "folder" : "file";
+    const confirmed = window.confirm(`Move this ${label} to trash?\n\n${entry.path}`);
+    if (!confirmed) {
+      return;
+    }
+
+    setDeleteError(null);
+    setDeletingPath(entry.path);
+
+    try {
+      const { error, response } = await deleteApiV1Files({
+        client: apiClient,
+        query: {
+          path: entry.path,
+          type: entry.type,
+        },
+      });
+
+      if (error) {
+        const message =
+          error.error?.message ||
+          `delete failed with status ${response.status}`;
+        throw new Error(message);
+      }
+
+      await refreshListing();
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "delete failed");
+    } finally {
+      setDeletingPath(null);
+    }
+  }
+
   return (
-    <main className="dashboard-shell">
-      <header className="dashboard-header">
+    <main className="min-h-screen p-6 space-y-6 max-w-5xl mx-auto">
+      <header className="flex items-center justify-between">
         <div>
-          <p className="eyebrow">Dashboard</p>
+          <p className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+            Dashboard
+          </p>
           <h1>{session.user.email}</h1>
-          <p className="dashboard-meta">
+          <p className="text-sm text-muted-foreground">
             User bucket name: <code>{session.user.id}</code>
           </p>
         </div>
-        <button className="secondary-button" onClick={auth.logout} type="button">
+        <Button variant="outline" onClick={logout} type="button">
           Log out
-        </button>
+        </Button>
       </header>
 
-      <section className="dashboard-grid">
-        <article className="panel">
-          <p className="panel-label">Current folder</p>
-          <h2>{currentPath || "Root"}</h2>
-          <p>
-            Browse the authenticated user's bucket path and step into nested
-            folders from here.
-          </p>
-          <nav className="breadcrumb-row" aria-label="Breadcrumb">
-            <button
-              className="crumb-button"
-              onClick={() => openPath("")}
-              type="button"
-            >
-              root
-            </button>
-            {segments.map((segment, index) => {
-              const path = segments.slice(0, index + 1).join("/");
-              return (
-                <button
-                  className="crumb-button"
-                  key={path}
-                  onClick={() => openPath(path)}
-                  type="button"
-                >
-                  {segment}
-                </button>
-              );
-            })}
-          </nav>
-        </article>
-        <article className="panel">
-          <p className="panel-label">Listing status</p>
-          <h2>{isLoading ? "Loading" : `${listing?.entries?.length ?? 0} entries`}</h2>
-          <p>
-            Pagination token exposed by backend:{" "}
-            <code>{listing?.next_continuation_token || "none"}</code>
-          </p>
-        </article>
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader>
+            <p className="text-sm font-medium text-muted-foreground">Current folder</p>
+            <CardTitle>{currentPath || "Root"}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p>
+              Browse the authenticated user's bucket path and step into nested
+              folders from here.
+            </p>
+            <Breadcrumb className="mt-4">
+              <BreadcrumbList>
+                <BreadcrumbItem>
+                  <button
+                    className="text-sm hover:text-foreground text-muted-foreground"
+                    onClick={() => openPath("")}
+                    type="button"
+                  >
+                    root
+                  </button>
+                </BreadcrumbItem>
+                {segments.map((segment, index) => {
+                  const path = segments.slice(0, index + 1).join("/");
+                  const isLast = index === segments.length - 1;
+                  return (
+                    <React.Fragment key={path}>
+                      <BreadcrumbSeparator />
+                      <BreadcrumbItem>
+                        {isLast ? (
+                          <BreadcrumbPage>{segment}</BreadcrumbPage>
+                        ) : (
+                          <button
+                            className="text-sm hover:text-foreground text-muted-foreground"
+                            onClick={() => openPath(path)}
+                            type="button"
+                          >
+                            {segment}
+                          </button>
+                        )}
+                      </BreadcrumbItem>
+                    </React.Fragment>
+                  );
+                })}
+              </BreadcrumbList>
+            </Breadcrumb>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <p className="text-sm font-medium text-muted-foreground">Listing status</p>
+            <CardTitle>
+              {isLoading ? "Loading" : `${listing?.entries?.length ?? 0} entries`}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p>
+              Pagination token exposed by backend:{" "}
+              <code>{listing?.next_continuation_token || "none"}</code>
+            </p>
+          </CardContent>
+        </Card>
       </section>
 
       <UploadPanel
-        accessToken={session.accessToken}
         currentPath={currentPath}
-        onUploaded={async () => {
-          await loadListing(currentPath, session.accessToken);
-        }}
+        onUploaded={refreshListing}
       />
-
-      <section className="browser-panel">
-        {isLoading ? <p className="browser-state">Loading folder contents...</p> : null}
-        {error ? <p className="browser-state browser-error">{error}</p> : null}
+      <section className="rounded-lg border bg-card">
+        {isLoading ? (
+          <p className="p-4 text-sm text-muted-foreground">
+            Loading folder contents...
+          </p>
+        ) : null}
+        {error ? <p className="p-4 text-sm text-destructive">{(error as Error).message}</p> : null}
+        {deleteError ? <p className="p-4 text-sm text-destructive">{deleteError}</p> : null}
         {!isLoading && !error ? (
-          <ul className="entry-list">
-            {listing?.entries?.length ? (
-              listing.entries.map((entry) => (
-                <li className="entry-row" key={`${entry.type}:${entry.path}`}>
+          <ul className="divide-y">
+            {currentPath ? (
+              <li key="go-up">
+                <button
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/50 text-left"
+                  onClick={() => openPath(segments.slice(0, -1).join("/"))}
+                  type="button"
+                >
+                  <ArrowUp className="w-5 h-5 text-muted-foreground shrink-0" />
+                  <span className="font-medium text-sm flex-1 truncate">
+                    ..
+                  </span>
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    Go up
+                  </span>
+                </button>
+              </li>
+            ) : null}
+            {listing?.entries?.map((entry) => (
+              <li key={`${entry.type}:${entry.path}`}>
+                <div className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50">
                   <button
-                    className="entry-button"
+                    className="flex min-w-0 flex-1 items-center gap-3 text-left disabled:cursor-default disabled:opacity-50"
                     disabled={entry.type !== "folder"}
                     onClick={() => {
                       if (entry.type === "folder" && entry.path) {
@@ -163,20 +228,57 @@ export function DashboardPage() {
                     }}
                     type="button"
                   >
-                    <span className={`entry-badge entry-${entry.type}`}>
-                      {entry.type === "folder" ? "DIR" : "FILE"}
+                    {entry.type === "folder" ? (
+                      <Folder className="w-5 h-5 text-muted-foreground shrink-0" />
+                    ) : (
+                      <FileText className="w-5 h-5 text-muted-foreground shrink-0" />
+                    )}
+                    <span className="font-medium text-sm flex-1 truncate">
+                      {entry.name}
                     </span>
-                    <span className="entry-name">{entry.name}</span>
-                    <span className="entry-path">{entry.path}</span>
-                    <span className="entry-meta">
+                    <span className="text-xs text-muted-foreground truncate max-w-xs">
+                      {entry.path}
+                    </span>
+                    <span className="text-xs text-muted-foreground shrink-0">
                       {formatEntryMeta(entry)}
                     </span>
                   </button>
-                </li>
-              ))
-            ) : (
-              <li className="browser-state">This folder is empty.</li>
-            )}
+                  {entry.type === "file" && entry.presigned_url ? (
+                    <Button
+                      aria-label={`Download ${entry.path || entry.name || "file"}`}
+                      asChild
+                      size="icon"
+                      type="button"
+                      variant="ghost"
+                    >
+                      <a
+                        href={entry.presigned_url}
+                        download={entry.name || "download"}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <Download />
+                      </a>
+                    </Button>
+                  ) : null}
+                  <Button
+                    aria-label={`Delete ${entry.path || entry.name || "entry"}`}
+                    disabled={!entry.path || deletingPath === entry.path}
+                    onClick={() => void handleDelete(entry)}
+                    size="icon"
+                    type="button"
+                    variant="ghost"
+                  >
+                    <Trash2 />
+                  </Button>
+                  </div>
+              </li>
+            ))}
+            {!listing?.entries?.length ? (
+              <li className="p-4 text-sm text-muted-foreground">
+                This folder is empty.
+              </li>
+            ) : null}
           </ul>
         ) : null}
       </section>
@@ -193,7 +295,7 @@ function formatEntryMeta(
 
   const parts = [];
   if (typeof entry.size === "number") {
-    parts.push(`${entry.size} bytes`);
+    parts.push(formatBytes(entry.size));
   }
   if (entry.last_modified) {
     parts.push(new Date(entry.last_modified).toLocaleString());

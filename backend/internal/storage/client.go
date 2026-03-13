@@ -129,6 +129,12 @@ type DeleteObjectInput struct {
 	Key    string
 }
 
+type PresignedURLInput struct {
+	Bucket     string
+	Key        string
+	Expiration time.Duration
+}
+
 type ObjectMetadata struct {
 	OriginalFilename string
 	StoredFilename   string
@@ -478,6 +484,26 @@ func (c *Client) DeleteObject(ctx context.Context, input DeleteObjectInput) erro
 	}
 
 	return nil
+}
+
+func (c *Client) GetPresignedURL(ctx context.Context, input PresignedURLInput) (string, error) {
+	if input.Expiration == 0 {
+		input.Expiration = 1 * time.Hour
+	}
+
+	presignClient := s3.NewPresignClient(c.s3)
+
+	request, err := presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(input.Bucket),
+		Key:    aws.String(input.Key),
+	}, func(opts *s3.PresignOptions) {
+		opts.Expires = input.Expiration
+	})
+	if err != nil {
+		return "", fmt.Errorf("presign get object %q in bucket %q: %w", input.Key, input.Bucket, err)
+	}
+
+	return request.URL, nil
 }
 
 func emptyToNil(value string) *string {
