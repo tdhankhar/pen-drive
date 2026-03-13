@@ -1,5 +1,9 @@
 # Agent Guidelines
 
+## Codebase Exploration
+
+To quickly locate files and folders for a feature, use `mcp__fff__find_files` for semantic queries on the codebase—it's faster than generic grep for discovering related code and components.
+
 ## Documentation File Naming
 
 Work plan and issue documentation in `docs/` and `docs/work/` should use timestamp-based naming:
