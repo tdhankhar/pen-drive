@@ -40,6 +40,30 @@ func TestSetRefreshCookieUsesHttpOnlyCookie(t *testing.T) {
 	if !cookie.Secure {
 		t.Fatal("expected Secure cookie")
 	}
+	if cookie.SameSite != http.SameSiteNoneMode {
+		t.Fatalf("expected SameSite=None, got %v", cookie.SameSite)
+	}
+}
+
+func TestSetRefreshCookieUsesLaxSameSiteInInsecureMode(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(recorder)
+	handler := NewHandler(nil, false)
+
+	handler.setRefreshCookie(context, "refresh-token", 2*time.Hour)
+
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	cookies := response.Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("expected 1 cookie, got %d", len(cookies))
+	}
+
+	if cookies[0].SameSite != http.SameSiteLaxMode {
+		t.Fatalf("expected SameSite=Lax, got %v", cookies[0].SameSite)
+	}
 }
 
 func TestRefreshHandlerRequiresCookie(t *testing.T) {

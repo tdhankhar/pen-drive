@@ -193,11 +193,21 @@ func (h *Handler) setRefreshCookie(c *gin.Context, token string, ttl time.Durati
 		maxAge = 0
 	}
 
+	c.SetSameSite(h.refreshCookieSameSite())
 	c.SetCookie(refreshCookieName, token, maxAge, refreshCookiePath, "", h.secure, true)
 }
 
 func (h *Handler) clearRefreshCookie(c *gin.Context) {
+	c.SetSameSite(h.refreshCookieSameSite())
 	c.SetCookie(refreshCookieName, "", -1, refreshCookiePath, "", h.secure, true)
+}
+
+func (h *Handler) refreshCookieSameSite() http.SameSite {
+	if h.secure {
+		return http.SameSiteNoneMode
+	}
+
+	return http.SameSiteLaxMode
 }
 
 func respondError(c *gin.Context, status int, code, message string) {
