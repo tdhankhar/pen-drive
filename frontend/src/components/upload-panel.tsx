@@ -75,12 +75,22 @@ type UploadConflictPolicy = Exclude<
   "reject"
 >;
 
+function debugUpload(event: string, details?: Record<string, unknown>) {
+  if (!import.meta.env.DEV) {
+    return;
+  }
+
+  console.debug(`[upload-panel] ${event}`, details ?? {});
+}
+
 export function UploadPanel({
   currentPath,
   onUploaded,
 }: UploadPanelProps) {
   const runtimeRef = useRef<UploadRuntime>({ currentPath });
   const folderInputRef = useRef<HTMLInputElement | null>(null);
+  const fileUppyConfiguredRef = useRef(false);
+  const folderUppyConfiguredRef = useRef(false);
   const pendingConflictResolverRef = useRef<
     ((policy: UploadConflictPolicy | null) => void) | null
   >(null);
@@ -126,20 +136,31 @@ export function UploadPanel({
   }, [currentPath]);
 
   useEffect(() => {
-    configureUppy({
-      mode: "file",
-      requestConflictPolicy: requestConflictPolicy,
-      setError: setFileError,
-      uppy: fileUppy,
-      runtimeRef,
+    debugUpload("configure-uppy", {
+      currentPath,
     });
-    configureUppy({
-      mode: "folder",
-      requestConflictPolicy: requestConflictPolicy,
-      setError: setFolderError,
-      uppy: folderUppy,
-      runtimeRef,
-    });
+
+    if (!fileUppyConfiguredRef.current) {
+      configureUppy({
+        mode: "file",
+        requestConflictPolicy: requestConflictPolicy,
+        setError: setFileError,
+        uppy: fileUppy,
+        runtimeRef,
+      });
+      fileUppyConfiguredRef.current = true;
+    }
+
+    if (!folderUppyConfiguredRef.current) {
+      configureUppy({
+        mode: "folder",
+        requestConflictPolicy: requestConflictPolicy,
+        setError: setFolderError,
+        uppy: folderUppy,
+        runtimeRef,
+      });
+      folderUppyConfiguredRef.current = true;
+    }
 
     return () => {
       fileUppy.destroy();
@@ -178,8 +199,19 @@ export function UploadPanel({
     setFolderError(null);
     setFolderMessage(null);
 
+    debugUpload("folder-selection", {
+      count: files.length,
+      currentPath,
+      rawPaths: Array.from(files).map((file) => file.webkitRelativePath || file.name),
+    });
+
     for (const file of Array.from(files)) {
-      const relativePath = file.webkitRelativePath || file.name;
+      const relativePath = normalizeFolderRelativePath(file.webkitRelativePath) || file.name;
+      debugUpload("folder-file-queued", {
+        fileName: file.name,
+        normalizedRelativePath: relativePath,
+        rawRelativePath: file.webkitRelativePath || file.name,
+      });
       try {
         folderUppy.addFile({
           name: file.name,
@@ -406,9 +438,18 @@ function configureUppy({
         return;
       }
 
-      const relativePath = file.meta.relativePath || nativeFile.webkitRelativePath;
+      const relativePath =
+        file.meta.relativePath ||
+        normalizeFolderRelativePath(nativeFile.webkitRelativePath) ||
+        nativeFile.name;
+      debugUpload("uppy-file-added", {
+        fileId: file.id,
+        mode,
+        name: file.name,
+        relativePath,
+      });
       uppy.setFileMeta(file.id, {
-        relativePath: relativePath || file.name,
+        relativePath,
       });
     });
   }
@@ -419,8 +460,25 @@ function configureUppy({
       .map((fileID) => uppy.getFile(fileID))
       .filter((file): file is UppyFile<UploadMeta, UploadBody> => Boolean(file));
 
+    debugUpload("uploader-start", {
+      mode,
+      fileIDs,
+      files: files.map((file) => ({
+        id: file.id,
+        name: file.name,
+        relativePath: file.meta.relativePath || null,
+        size: file.size ?? null,
+      })),
+    });
+
     const runtime = runtimeRef.current;
     const preview = await previewBatchConflicts(runtime, mode, files);
+    debugUpload("preview-result", {
+      mode,
+      hasConflicts: preview?.has_conflicts ?? null,
+      impactedPaths: preview?.impacted_paths ?? [],
+      items: preview?.items ?? [],
+    });
     const conflictPolicy = preview?.has_conflicts
       ? await requestConflictPolicy({
           impactedPaths: preview.impacted_paths ?? [],
@@ -581,6 +639,19 @@ function isMultipartEligible(file: UppyFile<UploadMeta, UploadBody>) {
   return typeof file.size === "number" && file.size > MULTIPART_THRESHOLD_BYTES;
 }
 
+function normalizeFolderRelativePath(relativePath: string) {
+  const normalized = relativePath
+    .replaceAll("\\", "/")
+    .split("/")
+    .filter(Boolean);
+
+  if (normalized.length <= 1) {
+    return normalized[0] ?? "";
+  }
+
+  return normalized.slice(1).join("/");
+}
+
 function authHeaders(): { Authorization: string } {
   const session = getSessionSnapshot();
   if (!session?.accessToken) {
@@ -729,6 +800,12 @@ async function previewBatchConflicts(
   const relativePaths = files.map((file) =>
     mode === "folder" ? file.meta.relativePath || file.name : file.name,
   );
+
+  debugUpload("preview-request", {
+    mode,
+    currentPath: runtime.currentPath,
+    relativePaths,
+  });
 
   const { data, error, response } = await postApiV1FilesDuplicatesPreview({
     client: apiClient,
