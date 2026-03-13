@@ -43,10 +43,10 @@ import type {
   PostApiV1FilesUploadData,
 } from "../lib/api/generated";
 import { apiClient } from "../lib/api/http";
+import { API_BASE_URL } from "../lib/api/base-url";
 import { getSessionSnapshot } from "../lib/session";
 
 const MULTIPART_THRESHOLD_BYTES = 5 * 1024 * 1024;
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8080";
 
 type UploadPanelProps = {
   currentPath: string;
@@ -299,13 +299,8 @@ function UppySurface({
     0,
   );
   const aggregateProgress = totalBytes > 0 ? Math.round((uploadedBytes / totalBytes) * 100) : 0;
-  const shouldHighlightDropzone = fileCount === 0 && nextStepHint !== null;
-
-  useEffect(() => {
-    if (fileCount > 0) {
-      setNextStepHint(null);
-    }
-  }, [fileCount]);
+  const visibleNextStepHint = fileCount === 0 ? nextStepHint : null;
+  const shouldHighlightDropzone = visibleNextStepHint !== null;
 
   async function handleUploadClick() {
     if (fileCount === 0) {
@@ -332,8 +327,8 @@ function UppySurface({
         <div className="flex items-center justify-between">
           <div className="min-w-0">
             <p className="text-sm text-muted-foreground">{fileCount} queued</p>
-            {nextStepHint ? (
-              <p className="mt-1 text-xs text-primary">{nextStepHint}</p>
+            {visibleNextStepHint ? (
+              <p className="mt-1 text-xs text-primary">{visibleNextStepHint}</p>
             ) : (
               <p className="mt-1 text-xs text-muted-foreground">
                 {fileCount === 0
