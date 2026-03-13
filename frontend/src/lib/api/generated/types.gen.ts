@@ -79,6 +79,7 @@ export type GithubComAbhishekPenDriveBackendInternalApiDtoFileSystemEntry = {
     last_modified?: string;
     name?: string;
     path?: string;
+    presigned_url?: string;
     size?: number;
     type?: string;
 };

@@ -6,6 +6,7 @@ type FileSystemEntry struct {
 	Type         string `json:"type" example:"file"`
 	Size         int64  `json:"size,omitempty" example:"2048"`
 	LastModified string `json:"last_modified,omitempty" example:"2026-03-12T16:00:00Z"`
+	PresignedURL string `json:"presigned_url,omitempty" example:"https://s3.example.com/..."`
 }
 
 const (

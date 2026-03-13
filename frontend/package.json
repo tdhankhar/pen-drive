@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "api:generate": "openapi-ts",
+    "codegen": "npm run api:generate",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "npm run lint:ox && npm run lint:eslint",

@@ -960,6 +960,10 @@ const docTemplate = `{
                     "type": "string",
                     "example": "photos/photo.jpg"
                 },
+                "presigned_url": {
+                    "type": "string",
+                    "example": "https://s3.example.com/..."
+                },
                 "size": {
                     "type": "integer",
                     "example": 2048

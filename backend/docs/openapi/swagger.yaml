@@ -131,6 +131,9 @@ definitions:
       path:
         example: photos/photo.jpg
         type: string
+      presigned_url:
+        example: https://s3.example.com/...
+        type: string
       size:
         example: 2048
         type: integer

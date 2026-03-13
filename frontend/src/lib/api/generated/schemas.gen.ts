@@ -201,6 +201,10 @@ export const github_com_abhishek_pen_drive_backend_internal_api_dto_FileSystemEn
             type: 'string',
             example: 'photos/photo.jpg'
         },
+        presigned_url: {
+            type: 'string',
+            example: 'https://s3.example.com/...'
+        },
         size: {
             type: 'integer',
             example: 2048

@@ -18,6 +18,9 @@ type stubStorageClient struct {
 	listPathInput          storage.ListPathInput
 	listPathResult         storage.ListPathResult
 	listPathErr            error
+	presignedURLInputs     []storage.PresignedURLInput
+	presignedURL           string
+	presignedURLErr        error
 	putInputs              []storage.PutObjectInput
 	putErr                 error
 	putErrFor              map[string]error
@@ -116,6 +119,17 @@ func (s *stubStorageClient) DeleteObject(_ context.Context, input storage.Delete
 	return s.deleteErr
 }
 
+func (s *stubStorageClient) GetPresignedURL(_ context.Context, input storage.PresignedURLInput) (string, error) {
+	s.presignedURLInputs = append(s.presignedURLInputs, input)
+	if s.presignedURLErr != nil {
+		return "", s.presignedURLErr
+	}
+	if s.presignedURL != "" {
+		return s.presignedURL, nil
+	}
+	return "https://example.test/download", nil
+}
+
 func TestValidateDestinationPath(t *testing.T) {
 	t.Parallel()
 
@@ -161,7 +175,7 @@ func TestValidateDestinationPath(t *testing.T) {
 func TestListHidesTrashNamespace(t *testing.T) {
 	t.Parallel()
 
-	service := NewService(&stubStorageClient{
+	storageClient := &stubStorageClient{
 		listPathResult: storage.ListPathResult{
 			Folders: []storage.FolderEntry{
 				{Name: "docs", Path: "docs"},
@@ -172,7 +186,9 @@ func TestListHidesTrashNamespace(t *testing.T) {
 				{Name: "report.pdf", Path: "trash/docs/report.pdf", Size: 42},
 			},
 		},
-	})
+		presignedURL: "https://example.test/readme.txt",
+	}
+	service := NewService(storageClient)
 
 	response, err := service.List(context.Background(), "user-123", "", "", 100)
 	if err != nil {
@@ -184,6 +200,12 @@ func TestListHidesTrashNamespace(t *testing.T) {
 	}
 	if response.Entries[0].Path != "docs" || response.Entries[1].Path != "readme.txt" {
 		t.Fatalf("unexpected visible entries: %+v", response.Entries)
+	}
+	if response.Entries[1].PresignedURL != "https://example.test/readme.txt" {
+		t.Fatalf("expected presigned URL on visible file entry, got %+v", response.Entries[1])
+	}
+	if len(storageClient.presignedURLInputs) != 1 || storageClient.presignedURLInputs[0].Key != "readme.txt" {
+		t.Fatalf("expected presigned URL generation only for visible files, got %+v", storageClient.presignedURLInputs)
 	}
 }
 

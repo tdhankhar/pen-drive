@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Folder, FileText, ArrowUp, Trash2 } from "lucide-react";
+import { Folder, FileText, ArrowUp, Trash2, Download } from "lucide-react";
 import { UploadPanel } from "../components/upload-panel";
 import { deleteApiV1Files } from "../lib/api/generated";
 import {
@@ -242,6 +242,24 @@ export function DashboardPage() {
                       {formatEntryMeta(entry)}
                     </span>
                   </button>
+                  {entry.type === "file" && entry.presigned_url ? (
+                    <Button
+                      aria-label={`Download ${entry.path || entry.name || "file"}`}
+                      asChild
+                      size="icon"
+                      type="button"
+                      variant="ghost"
+                    >
+                      <a
+                        href={entry.presigned_url}
+                        download={entry.name || "download"}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <Download />
+                      </a>
+                    </Button>
+                  ) : null}
                   <Button
                     aria-label={`Delete ${entry.path || entry.name || "entry"}`}
                     disabled={!entry.path || deletingPath === entry.path}
@@ -252,7 +270,7 @@ export function DashboardPage() {
                   >
                     <Trash2 />
                   </Button>
-                </div>
+                  </div>
               </li>
             ))}
             {!listing?.entries?.length ? (

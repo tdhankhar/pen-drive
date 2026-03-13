@@ -60,6 +60,7 @@ type storageClient interface {
 	ListObjectKeys(ctx context.Context, input storage.ListObjectKeysInput) ([]string, error)
 	CopyObject(ctx context.Context, input storage.CopyObjectInput) error
 	DeleteObject(ctx context.Context, input storage.DeleteObjectInput) error
+	GetPresignedURL(ctx context.Context, input storage.PresignedURLInput) (string, error)
 }
 
 func NewService(storageClient storageClient) *Service {
@@ -104,6 +105,15 @@ func (s *Service) List(ctx context.Context, userID, rawPath, continuationToken s
 		}
 		if !file.LastModified.IsZero() {
 			entry.LastModified = file.LastModified.UTC().Format(time.RFC3339)
+		}
+		// Generate presigned URL for file download
+		presignedURL, err := s.storage.GetPresignedURL(ctx, storage.PresignedURLInput{
+			Bucket:     userID,
+			Key:        file.Path,
+			Expiration: 1 * time.Hour,
+		})
+		if err == nil {
+			entry.PresignedURL = presignedURL
 		}
 		entries = append(entries, entry)
 	}
