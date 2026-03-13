@@ -16,7 +16,7 @@ struct Args {
     path: PathBuf,
 
     /// Rules to check (comma-separated)
-    #[arg(short, long, default_value = "barrel-imports,conditional-render")]
+    #[arg(short, long, default_value = "rendering-conditional-render,js-flatmap-filter")]
     rules: String,
 }
 
@@ -46,18 +46,11 @@ fn main() -> Result<()> {
     {
         let path = entry.path();
         if let Ok(content) = fs::read_to_string(path) {
-            let source_type = SourceType::from_path(path).unwrap_or_default();
-            let allocator = Allocator::default();
-            let parser = OxcParser::new(&allocator, &content, source_type);
-            let result = parser.parse();
-
-            let program = result.program;
-
-            if args.rules.contains("barrel-imports") {
-                check_barrel_imports(&mut violations, path, &program, &content);
-            }
-            if args.rules.contains("conditional-render") {
+            if args.rules.contains("rendering-conditional-render") {
                 check_conditional_render(&mut violations, path, &content);
+            }
+            if args.rules.contains("js-flatmap-filter") {
+                check_flatmap_filter(&mut violations, path, &content);
             }
         }
     }
@@ -92,62 +85,39 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn get_line_col(offset: u32, content: &str) -> (u32, u32) {
-    let mut line = 1u32;
-    let mut col = 0u32;
-
-    for (i, ch) in content.chars().enumerate() {
-        if i >= offset as usize {
-            break;
-        }
-        if ch == '\n' {
-            line += 1;
-            col = 0;
-        } else {
-            col += 1;
-        }
-    }
-
-    (line, col)
-}
-
-fn check_barrel_imports(
+fn check_conditional_render(
     violations: &mut Vec<Violation>,
     path: &Path,
-    program: &oxc_ast::ast::Program<'_>,
     content: &str,
 ) {
-    let barrel_packages = vec![
-        "lucide-react",
-        "@mui/material",
-        "@mui/icons-material",
-        "@tabler/icons-react",
-        "react-icons",
-        "lodash",
-        "date-fns",
-    ];
+    let lines: Vec<&str> = content.lines().collect();
 
-    for stmt in &program.body {
-        if let Statement::ImportDeclaration(import) = stmt {
-            let source = import.source.value.to_string();
+    for (line_num, line) in lines.iter().enumerate() {
+        let line_no = (line_num + 1) as u32;
 
-            if barrel_packages.iter().any(|pkg| source.contains(pkg)) {
-                if let Some(specifiers) = &import.specifiers {
-                    if !specifiers.is_empty() {
-                        // Check for named imports
-                        for spec in specifiers {
-                            use oxc_ast::ast::ImportDeclarationSpecifier;
-                            if !matches!(spec, ImportDeclarationSpecifier::ImportDefaultSpecifier(_)) {
-                                let (line, col) = get_line_col(import.span.start, content);
-                                violations.push(Violation {
-                                    rule: "barrel-imports".to_string(),
-                                    file: path.display().to_string(),
-                                    line,
-                                    column: col,
-                                    message: format!("Named imports from '{}'", source),
-                                });
-                                break; // Only report once per import
-                            }
+        // Look for JSX expression with && pattern
+        if let Some(brace_pos) = line.find('{') {
+            // Find the closing brace
+            if let Some(close_brace) = line[brace_pos + 1..].find('}') {
+                let expr = &line[brace_pos + 1..brace_pos + 1 + close_brace];
+
+                // Check for && operator
+                if let Some(and_pos) = expr.find("&&") {
+                    let before_and = expr[..and_pos].trim();
+                    let after_and = expr[and_pos + 2..].trim();
+
+                    // Must have JSX after && (look for < character)
+                    if after_and.starts_with('<') {
+                        // Check if the condition is unsafe
+                        if is_unsafe_condition(before_and) {
+                            let col = (brace_pos + 1 + and_pos) as u32;
+                            violations.push(Violation {
+                                rule: "rendering-conditional-render".to_string(),
+                                file: path.display().to_string(),
+                                line: line_no,
+                                column: col,
+                                message: format!("Unsafe && with '{}' – use ternary or explicit boolean check", before_and),
+                            });
                         }
                     }
                 }
@@ -156,41 +126,110 @@ fn check_barrel_imports(
     }
 }
 
-fn check_conditional_render(
+fn is_unsafe_condition(condition: &str) -> bool {
+    let trimmed = condition.trim();
+
+    // SAFE: Boolean flags (is*, has*, can*, should*, will*, show*, hide*, enable*, disable*)
+    if is_boolean_identifier(trimmed) {
+        return false;
+    }
+
+    // SAFE: Comparison operators
+    if trimmed.contains('>') || trimmed.contains('<') || trimmed.contains('=') {
+        return false;
+    }
+
+    // SAFE: Negation (but not double negation - those need !! which is different)
+    if trimmed.starts_with('!') && !trimmed.starts_with("!!") {
+        return false;
+    }
+
+    // SAFE: Double negation !!
+    if trimmed.starts_with("!!") {
+        return false;
+    }
+
+    // SAFE: Optional chaining
+    if trimmed.contains("?.") {
+        return false;
+    }
+
+    // SAFE: Method calls with .
+    if trimmed.contains("?.") || trimmed.ends_with(')') && trimmed.contains('(') {
+        return false;
+    }
+
+    // UNSAFE: Bare identifier/property that could be falsy number/string/array
+    true
+}
+
+fn is_boolean_identifier(s: &str) -> bool {
+    let s_lower = s.to_lowercase();
+    let prefixes = vec![
+        "is", "has", "can", "should", "will", "show", "hide", "enable", "disable",
+    ];
+    prefixes.iter().any(|p| s.starts_with(p) && s.len() > p.len() && s.chars().nth(p.len()).unwrap().is_uppercase())
+}
+
+fn check_flatmap_filter(
     violations: &mut Vec<Violation>,
     path: &Path,
     content: &str,
 ) {
-    // Simple regex-like search for && in JSX context
     let lines: Vec<&str> = content.lines().collect();
 
     for (line_num, line) in lines.iter().enumerate() {
         let line_no = (line_num + 1) as u32;
 
-        // Look for { ... && pattern
-        if let Some(brace_pos) = line.find('{') {
-            if let Some(and_pos) = line[brace_pos..].find("&&") {
-                let and_pos = brace_pos + and_pos;
-                let before = &line[brace_pos + 1..and_pos].trim();
+        // Pattern: .map(...).filter(Boolean) or .map(...).filter(x => x)
+        if let Some(filter_pos) = line.find(".filter(") {
+            // Check if there's .map( before this
+            if let Some(map_pos) = line[..filter_pos].rfind(".map(") {
+                // Extract filter argument
+                let after_filter = &line[filter_pos + 8..]; // ".filter(" is 8 chars
+                let filter_arg = extract_until_paren_close(after_filter);
 
-                // Skip if it's a safe boolean check
-                let is_safe = before.is_empty()
-                    || before.ends_with('>') // comparison
-                    || before.ends_with('=')
-                    || before.ends_with('!')
-                    || before.starts_with("is")
-                    || before.starts_with("has");
-
-                if !is_safe {
+                if is_flatmap_filter_arg(&filter_arg) {
+                    let col = filter_pos as u32;
                     violations.push(Violation {
-                        rule: "conditional-render".to_string(),
+                        rule: "js-flatmap-filter".to_string(),
                         file: path.display().to_string(),
                         line: line_no,
-                        column: and_pos as u32,
-                        message: "Unsafe && in JSX – use ternary or check for falsy values".to_string(),
+                        column: col,
+                        message: "Use .flatMap() instead of .map().filter() – more efficient".to_string(),
                     });
                 }
             }
         }
     }
+}
+
+fn extract_until_paren_close(s: &str) -> String {
+    let mut depth = 0;
+    for (i, ch) in s.chars().enumerate() {
+        match ch {
+            '(' => depth += 1,
+            ')' => {
+                if depth == 0 {
+                    return s[..i].to_string();
+                }
+                depth -= 1;
+            }
+            _ => {}
+        }
+    }
+    s.to_string()
+}
+
+fn is_flatmap_filter_arg(arg: &str) -> bool {
+    let arg = arg.trim();
+    // Pattern: Boolean (the constructor) or x => x (identity function)
+    arg == "Boolean"
+        || arg == "x => x"
+        || arg == "item => item"
+        || arg == "el => el"
+        || arg == "v => v"
+        || arg == "a => a"
+        || arg.matches("=>").count() == 1
+            && arg.split("=>").last().map(|p| p.trim()) == Some("x")
 }
