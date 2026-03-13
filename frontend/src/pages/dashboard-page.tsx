@@ -23,6 +23,7 @@ import type {
 } from "../lib/api/generated";
 import { apiClient } from "../lib/api/http";
 import { useAuth } from "../lib/use-auth";
+import { formatBytes } from "../lib/utils";
 
 export function DashboardPage() {
   const {
@@ -294,7 +295,7 @@ function formatEntryMeta(
 
   const parts = [];
   if (typeof entry.size === "number") {
-    parts.push(`${entry.size} bytes`);
+    parts.push(formatBytes(entry.size));
   }
   if (entry.last_modified) {
     parts.push(new Date(entry.last_modified).toLocaleString());

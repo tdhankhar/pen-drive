@@ -1,7 +1,6 @@
 import Uppy, { type UploadResult, type UppyFile } from "@uppy/core";
 import {
   Dropzone,
-  UploadButton,
   UppyContextProvider,
   useUppyState,
 } from "@uppy/react";
@@ -21,9 +20,11 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
+import { formatBytes } from "@/lib/utils";
 
 import {
   postApiV1FilesDuplicatesPreview,
@@ -284,6 +285,7 @@ function UppySurface({
   description: string;
   uppy: Uppy<UploadMeta, UploadBody>;
 }) {
+  const [nextStepHint, setNextStepHint] = useState<string | null>(null);
   const files = useUppyState(uppy, (state) => Object.values(state.files)) as Array<
     UppyFile<UploadMeta, UploadBody>
   >;
@@ -297,14 +299,52 @@ function UppySurface({
     0,
   );
   const aggregateProgress = totalBytes > 0 ? Math.round((uploadedBytes / totalBytes) * 100) : 0;
+  const shouldHighlightDropzone = fileCount === 0 && nextStepHint !== null;
+
+  useEffect(() => {
+    if (fileCount > 0) {
+      setNextStepHint(null);
+    }
+  }, [fileCount]);
+
+  async function handleUploadClick() {
+    if (fileCount === 0) {
+      setNextStepHint("Add files first by dropping them here, clicking the surface, or picking a folder.");
+      return;
+    }
+
+    setNextStepHint(null);
+    await uppy.upload();
+  }
 
   return (
     <UppyContextProvider uppy={uppy}>
       <div className="flex flex-col gap-2 px-6 pb-6">
-        <Dropzone height="180px" note={description} width="100%" />
+        <div
+          className={`rounded-xl transition-all ${
+            shouldHighlightDropzone
+              ? "ring-2 ring-primary ring-offset-2 ring-offset-background"
+              : ""
+          }`}
+        >
+          <Dropzone height="180px" note={description} width="100%" />
+        </div>
         <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">{fileCount} queued</p>
-          <UploadButton />
+          <div className="min-w-0">
+            <p className="text-sm text-muted-foreground">{fileCount} queued</p>
+            {nextStepHint ? (
+              <p className="mt-1 text-xs text-primary">{nextStepHint}</p>
+            ) : (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {fileCount === 0
+                  ? "Next step: add files or pick a folder."
+                  : "Next step: review the queue, then upload."}
+              </p>
+            )}
+          </div>
+          <Button onClick={() => void handleUploadClick()} type="button">
+            Upload queue
+          </Button>
         </div>
         {fileCount > 0 ? (
           <>
@@ -418,7 +458,8 @@ function configureUppy({
       : null;
 
     if (preview?.has_conflicts && !conflictPolicy) {
-      throw new Error("upload cancelled");
+      setError("upload cancelled");
+      return;
     }
 
     const normalizedPolicy =
@@ -1090,29 +1131,55 @@ function ConflictPreviewDialog({
 }) {
   return (
     <Dialog open={true} onOpenChange={(open) => !open && onCancel()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Conflicts found in this upload</DialogTitle>
+          <DialogDescription>
+            Choose whether to keep both versions or replace the existing files.
+          </DialogDescription>
         </DialogHeader>
-        <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
-          {conflictDialog.items
-            .filter((item) => item.conflict)
-            .map((item, index) => (
-              <div
-                className="rounded border p-3 text-sm space-y-1"
-                key={item.requested_path || item.rename_path || `conflict-${index}`}
-              >
-                <p><span className="font-medium">Existing: </span>{item.existing_path || item.requested_path || "unknown"}</p>
-                <p><span className="font-medium">Rename target: </span>{item.rename_path || "not available"}</p>
-              </div>
-            ))}
+        <div className="max-h-[60vh] overflow-y-auto rounded-lg border">
+          <table className="w-full border-collapse text-left text-sm">
+            <thead className="sticky top-0 bg-background">
+              <tr className="border-b">
+                <th className="px-4 py-3 font-semibold">Existing file</th>
+                <th className="px-4 py-3 font-semibold">Renamed copy target</th>
+              </tr>
+            </thead>
+            <tbody>
+              {conflictDialog.items
+                .filter((item) => item.conflict)
+                .map((item, index) => (
+                  <tr
+                    className="border-b align-top last:border-b-0"
+                    key={item.requested_path || item.rename_path || `conflict-${index}`}
+                  >
+                    <td className="px-4 py-3 break-all font-medium">
+                      {item.existing_path || item.requested_path || "unknown"}
+                    </td>
+                    <td className="px-4 py-3 break-all text-muted-foreground">
+                      {item.rename_path || "not available"}
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onCancel}>Cancel upload</Button>
-          <Button variant="outline" onClick={() => onSelect(DuplicateConflictPolicy.DUPLICATE_CONFLICT_POLICY_RENAME)}>
+        <DialogFooter className="gap-2 sm:justify-between sm:space-x-0">
+          <Button className="w-full sm:w-auto" variant="outline" onClick={onCancel}>
+            Cancel upload
+          </Button>
+          <Button
+            className="w-full sm:w-auto"
+            variant="outline"
+            onClick={() => onSelect(DuplicateConflictPolicy.DUPLICATE_CONFLICT_POLICY_RENAME)}
+          >
             Create renamed copies
           </Button>
-          <Button onClick={() => onSelect(DuplicateConflictPolicy.DUPLICATE_CONFLICT_POLICY_REPLACE)}>
+          <Button
+            className="w-full sm:w-auto"
+            onClick={() => onSelect(DuplicateConflictPolicy.DUPLICATE_CONFLICT_POLICY_REPLACE)}
+          >
             Replace existing files
           </Button>
         </DialogFooter>
@@ -1141,21 +1208,4 @@ function getUploadedBytes(file: UppyFile<UploadMeta, UploadBody>) {
   return typeof file.progress?.bytesUploaded === "number"
     ? file.progress.bytesUploaded
     : 0;
-}
-
-function formatBytes(bytes: number) {
-  if (bytes < 1024) {
-    return `${bytes} B`;
-  }
-
-  const units = ["KB", "MB", "GB", "TB"];
-  let value = bytes;
-  let unitIndex = -1;
-
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex += 1;
-  }
-
-  return `${value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 }
