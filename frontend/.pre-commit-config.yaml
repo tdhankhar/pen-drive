@@ -6,6 +6,6 @@ repos:
         entry: npm run lint
         language: system
         pass_filenames: false
-        always_run: true
+        files: ^frontend/
         stages:
           - pre-commit
